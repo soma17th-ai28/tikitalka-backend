@@ -2,3 +2,8 @@
 __pycache__/
 *.pyc
 .mypy_cache/
+
+# Development automation tools
+.claude/
+scripts/ralph/
+tasks/

@@ -31,15 +31,24 @@ END_SIGNALS = {"끝", "종료", "bye", "goodbye", "그만", "닫기", "exit", "q
 
 SYSTEM_PROMPT = (
     "You are a soccer-expert friend: enthusiastic, knowledgeable, and casual.\n\n"
-    "If you need current news to answer accurately (recent match results, transfers, injuries), "
-    "respond with ONLY this line and nothing else:\n"
-    "[NEED_NEWS: <concise search keyword>]\n\n"
-    "Otherwise, respond ONLY in this exact format (no other text):\n"
-    "REPLY: <answer in at most 2 lines>\n"
-    "SUGGEST: <one follow-up question to keep the conversation going>\n\n"
-    "If the user signals they want to end the conversation "
-    "(끝, 종료, bye, goodbye, 그만, exit, quit, thanks, 감사), write:\n"
+    "IMPORTANT: Respond ONLY in one of these two exact formats. No extra text, no notes, no explanations.\n\n"
+    "FORMAT A — when you need current news (recent match results, scores, transfers, injuries):\n"
+    "[NEED_NEWS: search keyword]\n\n"
+    "FORMAT B — for all other responses:\n"
+    "REPLY: <your answer in at most 2 lines>\n"
+    "SUGGEST: <one follow-up question>\n\n"
+    "FORMAT B end-of-conversation (when user says 끝/종료/bye/그만/exit/감사/고마워):\n"
+    "REPLY: <brief closing remark>\n"
     "SUGGEST: NONE\n\n"
+    "Match the user's language (Korean or English). Do NOT use FORMAT A if news context is already provided."
+)
+
+NEWS_SYSTEM_PROMPT = (
+    "You are a soccer-expert friend: enthusiastic, knowledgeable, and casual.\n\n"
+    "News context has been provided below. Use it to answer accurately.\n"
+    "Respond ONLY in this exact format (no extra text):\n"
+    "REPLY: <your answer in at most 2 lines>\n"
+    "SUGGEST: <one follow-up question>\n\n"
     "Match the user's language (Korean or English)."
 )
 
@@ -89,20 +98,26 @@ def is_end_signal(message: str) -> bool:
 
 
 def parse_llm_response(content: str, end_signal: bool) -> tuple[str, Optional[str]]:
-    reply = content.strip()
     suggested_question: Optional[str] = None
-
     reply_parts: list[str] = []
     suggest_value: Optional[str] = None
 
     for line in content.strip().splitlines():
-        if line.startswith("REPLY:"):
-            reply_parts.append(line[len("REPLY:"):].strip())
-        elif line.startswith("SUGGEST:"):
-            suggest_value = line[len("SUGGEST:"):].strip()
+        stripped = line.strip()
+        if stripped.startswith("REPLY:"):
+            reply_parts.append(stripped[len("REPLY:"):].strip())
+        elif stripped.startswith("SUGGEST:"):
+            suggest_value = stripped[len("SUGGEST:"):].strip()
 
     if reply_parts:
         reply = "\n".join(reply_parts[:2])
+    else:
+        # Strip residual [NEED_NEWS:...] tags and internal directives; use cleaned content
+        cleaned = NEWS_NEED_PATTERN.sub("", content).strip()
+        # If only SUGGEST: NONE remains (end signal case), give a closing reply
+        if suggest_value and suggest_value.upper() == "NONE" and not cleaned:
+            cleaned = "대화해서 즐거웠어! 또 궁금한 거 생기면 언제든지 찾아와 ⚽"
+        reply = cleaned or "잠깐, 제대로 된 답변을 못 드렸네요. 다시 질문해 주실 수 있나요?"
 
     if not end_signal and suggest_value and suggest_value.upper() != "NONE":
         suggested_question = suggest_value
@@ -170,28 +185,30 @@ async def call_upstage(history: list[Message], user_message: str) -> tuple[str, 
     news_keyword = extract_news_keyword(content)
     if news_keyword:
         news_context = await fetch_news(news_keyword)
-        if news_context:
-            messages_with_news: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-            for msg in history:
-                messages_with_news.append({"role": msg["role"], "content": msg["content"]})
-            messages_with_news.append({
-                "role": "system",
-                "content": f"[Recent news context]\n{news_context}",
-            })
-            messages_with_news.append({"role": "user", "content": user_message})
-            async with httpx.AsyncClient() as client:
-                response2 = await client.post(
-                    UPSTAGE_API_URL,
-                    headers={
-                        "Authorization": f"Bearer {UPSTAGE_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={"model": UPSTAGE_MODEL, "messages": messages_with_news},
-                    timeout=30.0,
-                )
-                response2.raise_for_status()
-                data2: dict[str, Any] = response2.json()
-            content = data2["choices"][0]["message"]["content"]
+        fallback_note = (
+            f"[No live news found for '{news_keyword}'. Answer with your best knowledge.]"
+            if not news_context else None
+        )
+        news_system = NEWS_SYSTEM_PROMPT
+        extra_context = news_context or fallback_note or ""
+        messages_with_news: list[dict[str, str]] = [{"role": "system", "content": news_system}]
+        for msg in history:
+            messages_with_news.append({"role": msg["role"], "content": msg["content"]})
+        messages_with_news.append({"role": "system", "content": extra_context})
+        messages_with_news.append({"role": "user", "content": user_message})
+        async with httpx.AsyncClient() as client:
+            response2 = await client.post(
+                UPSTAGE_API_URL,
+                headers={
+                    "Authorization": f"Bearer {UPSTAGE_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"model": UPSTAGE_MODEL, "messages": messages_with_news},
+                timeout=30.0,
+            )
+            response2.raise_for_status()
+            data2: dict[str, Any] = response2.json()
+        content = data2["choices"][0]["message"]["content"]
 
     return parse_llm_response(content, end_signal)
 
