@@ -1,7 +1,7 @@
 package com.tikitalka.repository;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.tikitalka.config.GoogleSheetsProperties;
@@ -18,9 +18,13 @@ public class ChatRepository {
 
     private final Sheets sheets;
     private final GoogleSheetsProperties properties;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
-    public ChatRepository(Sheets sheets, GoogleSheetsProperties properties, ObjectMapper objectMapper) {
+    public ChatRepository(
+            Sheets sheets,
+            GoogleSheetsProperties properties,
+            JsonMapper objectMapper
+    ) {
         this.sheets = sheets;
         this.properties = properties;
         this.objectMapper = objectMapper;
@@ -29,9 +33,12 @@ public class ChatRepository {
     public void append(ChatMessage message) {
         try {
             String relatedQJson = message.relatedQuestions() != null
-                    ? objectMapper.writeValueAsString(message.relatedQuestions()) : "";
+                    ? objectMapper.writeValueAsString(message.relatedQuestions())
+                    : "";
+
             String sourcesJson = message.sources() != null
-                    ? objectMapper.writeValueAsString(message.sources()) : "";
+                    ? objectMapper.writeValueAsString(message.sources())
+                    : "";
 
             List<Object> row = List.of(
                     message.deviceId(),
@@ -45,10 +52,12 @@ public class ChatRepository {
             );
 
             ValueRange body = new ValueRange().setValues(List.of(row));
+
             sheets.spreadsheets().values()
                     .append(properties.spreadsheetId(), properties.range(), body)
                     .setValueInputOption("RAW")
                     .execute();
+
         } catch (Exception e) {
             throw new RuntimeException("Google Sheets append 실패", e);
         }
@@ -61,20 +70,38 @@ public class ChatRepository {
                     .execute();
 
             List<List<Object>> values = response.getValues();
-            if (values == null || values.isEmpty()) return List.of();
+
+            if (values == null || values.isEmpty()) {
+                return List.of();
+            }
 
             List<ChatMessage> result = new ArrayList<>();
+
             for (List<Object> row : values) {
-                if (row.size() < 4) continue;
-                if (!deviceId.equals(row.get(0).toString())) continue;
+                if (row.size() < 4) {
+                    continue;
+                }
+
+                if (!deviceId.equals(row.get(0).toString())) {
+                    continue;
+                }
 
                 String relatedQJson = row.size() > 6 ? row.get(6).toString() : "";
                 String sourcesJson = row.size() > 7 ? row.get(7).toString() : "";
 
-                List<String> relatedQuestions = relatedQJson.isBlank() ? null
-                        : objectMapper.readValue(relatedQJson, new TypeReference<>() {});
-                List<Source> sources = sourcesJson.isBlank() ? null
-                        : objectMapper.readValue(sourcesJson, new TypeReference<>() {});
+                List<String> relatedQuestions = relatedQJson.isBlank()
+                        ? null
+                        : objectMapper.readValue(
+                        relatedQJson,
+                        new TypeReference<List<String>>() {}
+                );
+
+                List<Source> sources = sourcesJson.isBlank()
+                        ? null
+                        : objectMapper.readValue(
+                        sourcesJson,
+                        new TypeReference<List<Source>>() {}
+                );
 
                 result.add(new ChatMessage(
                         row.get(0).toString(),
@@ -87,7 +114,9 @@ public class ChatRepository {
                         sources
                 ));
             }
+
             return result;
+
         } catch (Exception e) {
             throw new RuntimeException("Google Sheets 조회 실패", e);
         }
@@ -98,6 +127,6 @@ public class ChatRepository {
     }
 
     private String emptyToNull(String value) {
-        return (value == null || value.isBlank()) ? null : value;
+        return value == null || value.isBlank() ? null : value;
     }
 }
