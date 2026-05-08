@@ -1,9 +1,10 @@
 import os
+import re
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
-from typing import Optional, TypedDict
+from typing import Any, Optional, TypedDict
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,12 +23,18 @@ MAX_TURNS = 10
 UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 UPSTAGE_API_URL = "https://api.upstage.ai/v1/chat/completions"
 UPSTAGE_MODEL = "solar-pro"
+NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "")
+NEWSDATA_API_URL = "https://newsdata.io/api/1/news"
+NEWS_NEED_PATTERN = re.compile(r"\[NEED_NEWS:\s*(.+?)\]")
 
 END_SIGNALS = {"끝", "종료", "bye", "goodbye", "그만", "닫기", "exit", "quit", "고마워", "감사", "thank"}
 
 SYSTEM_PROMPT = (
     "You are a soccer-expert friend: enthusiastic, knowledgeable, and casual.\n\n"
-    "Respond ONLY in this exact format (no other text):\n"
+    "If you need current news to answer accurately (recent match results, transfers, injuries), "
+    "respond with ONLY this line and nothing else:\n"
+    "[NEED_NEWS: <concise search keyword>]\n\n"
+    "Otherwise, respond ONLY in this exact format (no other text):\n"
     "REPLY: <answer in at most 2 lines>\n"
     "SUGGEST: <one follow-up question to keep the conversation going>\n\n"
     "If the user signals they want to end the conversation "
@@ -103,6 +110,40 @@ def parse_llm_response(content: str, end_signal: bool) -> tuple[str, Optional[st
     return reply, suggested_question
 
 
+def extract_news_keyword(content: str) -> Optional[str]:
+    match = NEWS_NEED_PATTERN.search(content)
+    return match.group(1).strip() if match else None
+
+
+async def fetch_news(keyword: str) -> Optional[str]:
+    if not NEWSDATA_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                NEWSDATA_API_URL,
+                params={"apikey": NEWSDATA_API_KEY, "q": keyword, "language": "en,ko", "size": 3},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            data: dict[str, Any] = response.json()
+        articles: list[Any] = data.get("results", [])[:3]
+        if not articles:
+            return None
+        lines: list[str] = [f"Latest news about '{keyword}':"]
+        for i, article in enumerate(articles, 1):
+            title: str = str(article.get("title", ""))
+            summary: str = str(article.get("description") or article.get("content") or "")
+            if len(summary) > 200:
+                summary = summary[:200] + "..."
+            lines.append(f"{i}. {title}")
+            if summary:
+                lines.append(f"   {summary}")
+        return "\n".join(lines)
+    except Exception:
+        return None
+
+
 async def call_upstage(history: list[Message], user_message: str) -> tuple[str, Optional[str]]:
     messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     for msg in history:
@@ -122,9 +163,36 @@ async def call_upstage(history: list[Message], user_message: str) -> tuple[str, 
             timeout=30.0,
         )
         response.raise_for_status()
-        data = response.json()
+        data: dict[str, Any] = response.json()
 
     content: str = data["choices"][0]["message"]["content"]
+
+    news_keyword = extract_news_keyword(content)
+    if news_keyword:
+        news_context = await fetch_news(news_keyword)
+        if news_context:
+            messages_with_news: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+            for msg in history:
+                messages_with_news.append({"role": msg["role"], "content": msg["content"]})
+            messages_with_news.append({
+                "role": "system",
+                "content": f"[Recent news context]\n{news_context}",
+            })
+            messages_with_news.append({"role": "user", "content": user_message})
+            async with httpx.AsyncClient() as client:
+                response2 = await client.post(
+                    UPSTAGE_API_URL,
+                    headers={
+                        "Authorization": f"Bearer {UPSTAGE_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"model": UPSTAGE_MODEL, "messages": messages_with_news},
+                    timeout=30.0,
+                )
+                response2.raise_for_status()
+                data2: dict[str, Any] = response2.json()
+            content = data2["choices"][0]["message"]["content"]
+
     return parse_llm_response(content, end_signal)
 
 
