@@ -20,7 +20,7 @@
       "id": "US-002",
       "title": "10턴 대화 맥락 세션 관리",
       "description": "사용자로서, 이전 대화 내용을 기억하는 AI와 대화하고 싶다.",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Store conversation history in server memory dict by session_id",
         "Keep only last 10 turns (user+assistant pairs), auto-remove older ones",

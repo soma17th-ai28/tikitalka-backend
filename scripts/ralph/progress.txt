@@ -25,3 +25,17 @@ Started: Fri May  8 21:56:07     2026
   - Server successfully tested: POST /chat returns 200 with correct schema, missing fields return 422
   - tikitalka-backend/ has empty Java stubs — ignore for this Python project
 ---
+
+## 2026-05-08 - US-002
+- Added in-memory session store: `sessions: dict[str, list[Message]]` keyed by session_id
+- Defined `Message` TypedDict with `role` and `content` fields
+- `save_turn()` appends user+assistant messages and trims to last 10 turns (20 messages)
+- `get_history()` returns prior messages for a session; wired into chat handler (passed to LLM in US-003)
+- MAX_TURNS constant set to 10 (easy to adjust)
+- Files changed: main.py
+- **Learnings for future iterations:**
+  - `sessions` dict is module-level — different session_ids are truly independent
+  - History is sliced as `history[-(MAX_TURNS * 2):]` to keep exactly 10 user+assistant pairs
+  - `sessions.setdefault(session_id, [])` avoids KeyError on first request for a session
+  - `_ = history` used temporarily until LLM wiring in US-003 (avoids unused-variable lint)
+---
