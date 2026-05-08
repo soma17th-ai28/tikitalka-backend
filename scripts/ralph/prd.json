@@ -33,7 +33,7 @@
       "id": "US-003",
       "title": "Upstage Solar LLM 연동 및 페르소나 적용",
       "description": "사용자로서, 축구에 해박한 친구처럼 대화하는 AI를 원한다.",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Request to Upstage API solar model",
         "System prompt applies soccer expert friend persona",

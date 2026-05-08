@@ -5,6 +5,10 @@
 - Run checks: `python -m mypy main.py --ignore-missing-imports`
 - Start server: `python -m uvicorn main:app --host 0.0.0.0 --port 8000`
 - tikitalka-backend/ is an empty Spring Boot skeleton — all new code goes in soccer/ root
+- Upstage API endpoint: https://api.upstage.ai/v1/chat/completions, model: solar-pro (OpenAI-compatible)
+- LLM response parsing: structured REPLY:/SUGGEST: format in system prompt; parse_llm_response() extracts both fields
+- End-signal detection: check if any END_SIGNALS keyword appears in lowercased user message
+- httpx.AsyncClient used for async LLM calls; raise HTTPException(502) on httpx errors
 
 ---
 
@@ -38,4 +42,20 @@ Started: Fri May  8 21:56:07     2026
   - History is sliced as `history[-(MAX_TURNS * 2):]` to keep exactly 10 user+assistant pairs
   - `sessions.setdefault(session_id, [])` avoids KeyError on first request for a session
   - `_ = history` used temporarily until LLM wiring in US-003 (avoids unused-variable lint)
+---
+
+## 2026-05-08 - US-003
+- Integrated Upstage Solar LLM via httpx (OpenAI-compatible API at https://api.upstage.ai/v1/chat/completions)
+- Added SYSTEM_PROMPT: soccer expert friend persona, enforces REPLY:/SUGGEST: output format
+- `call_upstage()`: builds messages list with system prompt + history + user message, calls API, parses response
+- `parse_llm_response()`: extracts REPLY (≤2 lines) and SUGGEST from LLM output; returns suggested_question=None on end signal or SUGGEST:NONE
+- `is_end_signal()`: checks if user message contains any of END_SIGNALS (끝, 종료, bye, 고마워, etc.)
+- HTTPException(502) raised on httpx.HTTPStatusError or httpx.RequestError
+- load_dotenv() called at startup to read UPSTAGE_API_KEY from .env
+- Files changed: main.py
+- **Learnings for future iterations:**
+  - Upstage API is OpenAI-compatible: same /v1/chat/completions path, Bearer token auth, same messages format
+  - `data = response.json()` returns Any; annotate extracted fields explicitly (`content: str = ...`) for mypy
+  - Structured output via system prompt (REPLY:/SUGGEST:) is more reliable than asking for JSON for this model
+  - parse_llm_response takes `end_signal: bool` so suggested_question is suppressed even if LLM forgets NONE
 ---
