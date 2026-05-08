@@ -60,7 +60,7 @@
       "id": "US-005",
       "title": "환경 변수 및 프로젝트 구조 설정",
       "description": "개발자로서, API 키를 안전하게 관리하고 프로젝트를 바로 실행할 수 있어야 한다.",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         ".env file for API key management (UPSTAGE_API_KEY, NEWSDATA_API_KEY)",
         ".env.example with key names only (no actual values)",

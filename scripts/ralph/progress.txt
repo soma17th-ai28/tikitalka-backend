@@ -76,3 +76,16 @@ Started: Fri May  8 21:56:07     2026
   - `dict[str, Any]` annotation on response.json() result is needed for mypy to accept .get() calls on it
   - `list[Any]` on articles allows .get() on each article dict without mypy complaints
 ---
+
+## 2026-05-08 - US-005
+- Created .env.example with UPSTAGE_API_KEY and NEWSDATA_API_KEY key names (no values)
+- Created .env with placeholder values (gitignored)
+- Created root .gitignore: .env, __pycache__/, *.pyc, .mypy_cache/
+- Created README.md with 3-line install+run instructions (cp .env.example → pip install → uvicorn)
+- requirements.txt already had all required packages from US-001 (fastapi, uvicorn, httpx, python-dotenv)
+- Files changed: .env.example (new), .env (new), .gitignore (new), README.md (new), scripts/ralph/prd.json
+- **Learnings for future iterations:**
+  - requirements.txt was already complete from US-001 — no changes needed
+  - .env is gitignored; only .env.example is committed to keep secrets out of VCS
+  - README.md kept intentionally minimal (3 lines) per acceptance criteria
+---
