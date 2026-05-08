@@ -47,7 +47,7 @@
       "id": "US-004",
       "title": "Newsdata.io 뉴스 API 폴백 연동",
       "description": "사용자로서, LLM이 모르는 최신 경기 결과나 이적 소식도 정확하게 답변받고 싶다.",
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Detect [NEED_NEWS: <keyword>] tag in LLM response",
         "Call Newsdata.io API with extracted keyword",

@@ -9,6 +9,8 @@
 - LLM response parsing: structured REPLY:/SUGGEST: format in system prompt; parse_llm_response() extracts both fields
 - End-signal detection: check if any END_SIGNALS keyword appears in lowercased user message
 - httpx.AsyncClient used for async LLM calls; raise HTTPException(502) on httpx errors
+- Newsdata.io API: GET https://newsdata.io/api/1/news?apikey=&q=&language=en,ko&size=3; results[].title/description
+- News fallback pattern: LLM emits [NEED_NEWS: keyword] → fetch_news() → inject as system message → re-call LLM
 
 ---
 
@@ -58,4 +60,19 @@ Started: Fri May  8 21:56:07     2026
   - `data = response.json()` returns Any; annotate extracted fields explicitly (`content: str = ...`) for mypy
   - Structured output via system prompt (REPLY:/SUGGEST:) is more reliable than asking for JSON for this model
   - parse_llm_response takes `end_signal: bool` so suggested_question is suppressed even if LLM forgets NONE
+---
+
+## 2026-05-08 - US-004
+- Added Newsdata.io news API fallback: detect [NEED_NEWS: keyword] in LLM response, fetch top 3 articles, inject as system message, re-call LLM
+- Added NEWSDATA_API_KEY, NEWSDATA_API_URL, NEWS_NEED_PATTERN constants
+- Added extract_news_keyword() using regex to parse [NEED_NEWS: ...] tag
+- Added async fetch_news(): GET newsdata.io/api/1/news, returns formatted top-3 titles+summaries; returns None on any failure (graceful fallback)
+- Updated call_upstage(): after first LLM response, check for news request; if present and news available, build messages_with_news and re-call
+- Updated SYSTEM_PROMPT to instruct LLM to emit [NEED_NEWS: keyword] when current news is needed
+- Files changed: main.py, scripts/ralph/prd.json, scripts/ralph/progress.txt
+- **Learnings for future iterations:**
+  - fetch_news() returns None when NEWSDATA_API_KEY is empty or any error occurs — caller uses original content as fallback
+  - News is injected as a second "system" role message (not "user") to avoid confusing conversation flow
+  - `dict[str, Any]` annotation on response.json() result is needed for mypy to accept .get() calls on it
+  - `list[Any]` on articles allows .get() on each article dict without mypy complaints
 ---
