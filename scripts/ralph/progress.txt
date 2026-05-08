@@ -1,0 +1,27 @@
+## Codebase Patterns
+- Project is Python FastAPI at the soccer/ root (main.py)
+- Pydantic v2 style validators: use @field_validator with @classmethod
+- mypy is the available typecheck tool (pyright not installed)
+- Run checks: `python -m mypy main.py --ignore-missing-imports`
+- Start server: `python -m uvicorn main:app --host 0.0.0.0 --port 8000`
+- tikitalka-backend/ is an empty Spring Boot skeleton — all new code goes in soccer/ root
+
+---
+
+# Ralph Progress Log
+Started: Fri May  8 21:56:07     2026
+---
+
+## 2026-05-08 - US-001
+- Implemented POST /chat endpoint with FastAPI
+- ChatRequest (session_id, message) + ChatResponse (session_id, reply, suggested_question) Pydantic models
+- field_validator ensures non-empty strings (returns 422 on missing/empty fields)
+- CORSMiddleware added for mobile app integration
+- requirements.txt created with fastapi, uvicorn[standard], httpx, python-dotenv
+- Files changed: main.py (new), requirements.txt (new), scripts/ralph/prd.json (new)
+- **Learnings for future iterations:**
+  - Pydantic v2 uses @field_validator + @classmethod, not @validator
+  - mypy works for typecheck: `python -m mypy main.py --ignore-missing-imports`
+  - Server successfully tested: POST /chat returns 200 with correct schema, missing fields return 422
+  - tikitalka-backend/ has empty Java stubs — ignore for this Python project
+---

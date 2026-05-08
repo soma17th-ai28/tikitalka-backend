@@ -1,0 +1,73 @@
+{
+  "projectName": "Soccer AI Chatbot API",
+  "branchName": "feature/soccer-chatbot-api",
+  "description": "FastAPI backend for a soccer AI chatbot using Upstage Solar LLM with Newsdata.io fallback",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "POST /chat 엔드포인트 기본 구조 구현",
+      "description": "개발자로서, 챗봇과 대화를 주고받을 수 있는 HTTP API 엔드포인트가 필요하다.",
+      "passes": true,
+      "acceptanceCriteria": [
+        "POST /chat endpoint accepts {session_id, message} JSON",
+        "Success response returns {session_id, reply, suggested_question}",
+        "Invalid requests return HTTP 422 + error message",
+        "Server starts with python -m uvicorn main:app",
+        "Typecheck / lint pass"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "10턴 대화 맥락 세션 관리",
+      "description": "사용자로서, 이전 대화 내용을 기억하는 AI와 대화하고 싶다.",
+      "passes": false,
+      "acceptanceCriteria": [
+        "Store conversation history in server memory dict by session_id",
+        "Keep only last 10 turns (user+assistant pairs), auto-remove older ones",
+        "Pass previous context to LLM on subsequent requests with same session_id",
+        "Different session_ids maintain independent conversations",
+        "Typecheck pass"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Upstage Solar LLM 연동 및 페르소나 적용",
+      "description": "사용자로서, 축구에 해박한 친구처럼 대화하는 AI를 원한다.",
+      "passes": false,
+      "acceptanceCriteria": [
+        "Request to Upstage API solar model",
+        "System prompt applies soccer expert friend persona",
+        "reply field is 2 lines max",
+        "suggested_question returns 1 follow-up question unless end signal detected",
+        "End signals (끝, 종료, bye etc) return suggested_question: null",
+        "Typecheck pass"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Newsdata.io 뉴스 API 폴백 연동",
+      "description": "사용자로서, LLM이 모르는 최신 경기 결과나 이적 소식도 정확하게 답변받고 싶다.",
+      "passes": false,
+      "acceptanceCriteria": [
+        "Detect [NEED_NEWS: <keyword>] tag in LLM response",
+        "Call Newsdata.io API with extracted keyword",
+        "Add top 3 news titles+summaries to context and re-request LLM",
+        "Graceful fallback on news API failure",
+        "Typecheck pass"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "환경 변수 및 프로젝트 구조 설정",
+      "description": "개발자로서, API 키를 안전하게 관리하고 프로젝트를 바로 실행할 수 있어야 한다.",
+      "passes": false,
+      "acceptanceCriteria": [
+        ".env file for API key management (UPSTAGE_API_KEY, NEWSDATA_API_KEY)",
+        ".env.example with key names only (no actual values)",
+        "requirements.txt with fastapi, uvicorn, httpx, python-dotenv",
+        "README.md with install and run instructions in 3 lines",
+        ".gitignore includes .env"
+      ]
+    }
+  ]
+}
