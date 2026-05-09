@@ -22,13 +22,10 @@ public class NewsService {
     public PageResponse<News> getNewsFeed(String league, int page, int size, String sortBy) throws IOException {
         List<News> allNews = newsRepository.findAll();
 
-        // Filtering
-        List<News> filteredNews = allNews;
-        if (league != null && !league.isEmpty()) {
-            filteredNews = allNews.stream()
-                    .filter(n -> n.league().equalsIgnoreCase(league))
-                    .collect(Collectors.toList());
-        }
+        // Filtering & Copying to mutable list to avoid UnsupportedOperationException on sort
+        List<News> filteredNews = allNews.stream()
+                .filter(n -> league == null || league.isEmpty() || n.league().equalsIgnoreCase(league))
+                .collect(Collectors.toList());
 
         // Sorting
         if ("HOT".equalsIgnoreCase(sortBy)) {
