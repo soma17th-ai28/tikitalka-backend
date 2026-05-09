@@ -40,3 +40,5 @@ secrets/
 *.json
 
 백엔드_개발계획서.md
+프론트_API_명세.md
+CLAUDE.md

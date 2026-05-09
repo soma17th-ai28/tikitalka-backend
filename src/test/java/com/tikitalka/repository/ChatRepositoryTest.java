@@ -32,7 +32,7 @@ class ChatRepositoryTest {
     private ChatRepository chatRepository;
 
     private static final GoogleSheetsProperties PROPERTIES =
-            new GoogleSheetsProperties("TestApp", "spreadsheet-id", "/creds.json", "Chat!A:E");
+            new GoogleSheetsProperties("TestApp", "spreadsheet-id", "/creds.json", "Chat!A:E", "News!A:I");
 
     @BeforeEach
     void setUp() {
