@@ -1,5 +1,7 @@
 package com.tikitalka.service;
 
+import com.tikitalka.dto.NewsDetailResponse;
+import com.tikitalka.dto.NewsSummaryResponse;
 import com.tikitalka.dto.PageResponse;
 import com.tikitalka.model.News;
 import com.tikitalka.repository.NewsRepository;
@@ -19,10 +21,10 @@ public class NewsService {
         this.newsRepository = newsRepository;
     }
 
-    public PageResponse<News> getNewsFeed(String league, int page, int size, String sortBy) throws IOException {
+    public PageResponse<NewsSummaryResponse> getNewsFeed(String league, int page, int size, String sortBy) throws IOException {
         List<News> allNews = newsRepository.findAll();
 
-        // Filtering & Copying to mutable list to avoid UnsupportedOperationException on sort
+        // Filtering & Copying to mutable list
         List<News> filteredNews = allNews.stream()
                 .filter(n -> league == null || league.isEmpty() || n.league().equalsIgnoreCase(league))
                 .collect(Collectors.toList());
@@ -31,7 +33,6 @@ public class NewsService {
         if ("HOT".equalsIgnoreCase(sortBy)) {
             filteredNews.sort(Comparator.comparingInt(News::hotnessScore).reversed());
         } else {
-            // Default: LATEST
             filteredNews.sort(Comparator.comparing(News::publishedAt).reversed());
         }
 
@@ -40,9 +41,23 @@ public class NewsService {
         int fromIndex = Math.min(page * size, totalElements);
         int toIndex = Math.min(fromIndex + size, totalElements);
 
-        List<News> pagedNews = filteredNews.subList(fromIndex, toIndex);
+        List<NewsSummaryResponse> content = filteredNews.subList(fromIndex, toIndex).stream()
+                .map(n -> new NewsSummaryResponse(
+                        n.id(), n.title(), n.summary(), n.league(), n.publishedAt(), n.hotnessScore()
+                ))
+                .collect(Collectors.toList());
 
-        return PageResponse.of(pagedNews, page, size, totalElements);
+        return PageResponse.of(content, page, size, totalElements);
+    }
+
+    public NewsDetailResponse getNewsDetail(String id) throws IOException {
+        return newsRepository.findAll().stream()
+                .filter(n -> n.id().equals(id))
+                .findFirst()
+                .map(n -> new NewsDetailResponse(
+                        n.id(), n.title(), n.summary(), n.league(), n.publishedAt(), n.hotnessScore(), n.originalContent()
+                ))
+                .orElseThrow(() -> new RuntimeException("News not found: " + id));
     }
 
     public void addNews(News news) throws IOException {
