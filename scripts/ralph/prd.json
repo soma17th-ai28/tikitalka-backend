@@ -68,6 +68,20 @@
         "README.md with install and run instructions in 3 lines",
         ".gitignore includes .env"
       ]
+    },
+    {
+      "id": "US-006",
+      "title": "축구 외 주제 최소 응답 처리",
+      "description": "사용자로서, 축구와 무관한 질문을 했을 때 챗봇이 간단히 답하되 추가 질문을 던지지 않길 원한다.",
+      "passes": false,
+      "acceptanceCriteria": [
+        "Non-soccer questions return only a short general response",
+        "Non-soccer questions return suggested_question: null",
+        "Soccer questions keep existing format: reply 2-line summary + suggested_question",
+        "Soccer/non-soccer judgment is implemented via LLM prompt instructions only (no keyword filter)",
+        "Works with only SYSTEM_PROMPT modification, no other code changes",
+        "Typecheck pass"
+      ]
     }
   ]
 }
