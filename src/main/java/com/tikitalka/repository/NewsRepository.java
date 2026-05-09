@@ -57,8 +57,10 @@ public class NewsRepository {
                 getString(row, 2),
                 getString(row, 3),
                 LocalDateTime.parse(getString(row, 4), FORMATTER),
-                Integer.parseInt(getString(row, 5)),
-                getString(row, 6)
+                Integer.parseInt(getString(row, 5).isEmpty() ? "0" : getString(row, 5)),
+                getString(row, 6),
+                getString(row, 7),
+                getString(row, 8)
         );
     }
 
@@ -67,10 +69,12 @@ public class NewsRepository {
                 news.id(),
                 news.title(),
                 news.summary(),
-                news.league(),
+                news.tag(),
                 news.publishedAt().format(FORMATTER),
                 String.valueOf(news.hotnessScore()),
-                news.originalContent()
+                news.originalContent(),
+                news.url(),
+                news.source()
         );
     }
 

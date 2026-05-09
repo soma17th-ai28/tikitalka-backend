@@ -27,10 +27,12 @@ public class InternalNewsController {
                 UUID.randomUUID().toString(),
                 request.title(),
                 request.summary(),
-                request.league(),
-                request.publishedAt(),
-                request.hotnessScore(),
-                request.originalContent()
+                request.tag(),
+                java.time.ZonedDateTime.parse(request.publishedAtStr()).toLocalDateTime(),
+                0, // hotnessScore initial value
+                request.originalContent(),
+                request.url(),
+                request.source()
         );
         newsService.addNews(news);
     }

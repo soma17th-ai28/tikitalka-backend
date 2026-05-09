@@ -21,12 +21,12 @@ public class NewsService {
         this.newsRepository = newsRepository;
     }
 
-    public PageResponse<NewsSummaryResponse> getNewsFeed(String league, int page, int size, String sortBy) throws IOException {
+    public PageResponse<NewsSummaryResponse> getNewsFeed(String tag, int page, int size, String sortBy) throws IOException {
         List<News> allNews = newsRepository.findAll();
 
         // Filtering & Copying to mutable list
         List<News> filteredNews = allNews.stream()
-                .filter(n -> league == null || league.isEmpty() || n.league().equalsIgnoreCase(league))
+                .filter(n -> tag == null || tag.isEmpty() || n.tag().equalsIgnoreCase(tag))
                 .collect(Collectors.toList());
 
         // Sorting
@@ -43,7 +43,7 @@ public class NewsService {
 
         List<NewsSummaryResponse> content = filteredNews.subList(fromIndex, toIndex).stream()
                 .map(n -> new NewsSummaryResponse(
-                        n.id(), n.title(), n.summary(), n.league(), n.publishedAt(), n.hotnessScore()
+                        n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.url(), n.source()
                 ))
                 .collect(Collectors.toList());
 
@@ -55,12 +55,18 @@ public class NewsService {
                 .filter(n -> n.id().equals(id))
                 .findFirst()
                 .map(n -> new NewsDetailResponse(
-                        n.id(), n.title(), n.summary(), n.league(), n.publishedAt(), n.hotnessScore(), n.originalContent()
+                        n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.originalContent(), n.url(), n.source()
                 ))
                 .orElseThrow(() -> new RuntimeException("News not found: " + id));
     }
 
     public void addNews(News news) throws IOException {
+        boolean isDuplicate = newsRepository.findAll().stream()
+                .anyMatch(n -> n.url().equals(news.url()));
+
+        if (isDuplicate) {
+            return; // Skip adding if duplicate URL exists
+        }
         newsRepository.save(news);
     }
 }

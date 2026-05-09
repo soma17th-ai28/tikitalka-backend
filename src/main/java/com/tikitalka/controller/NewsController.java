@@ -20,12 +20,12 @@ public class NewsController {
 
     @GetMapping
     public PageResponse<NewsSummaryResponse> getNewsFeed(
-            @RequestParam(required = false) String league,
+            @RequestParam(required = false) String tag,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "LATEST") String sort
     ) throws IOException {
-        return newsService.getNewsFeed(league, page, size, sort);
+        return newsService.getNewsFeed(tag, page, size, sort);
     }
 
     @GetMapping("/{id}")

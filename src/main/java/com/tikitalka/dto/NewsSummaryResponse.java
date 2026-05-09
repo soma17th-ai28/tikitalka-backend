@@ -6,8 +6,10 @@ public record NewsSummaryResponse(
         String id,
         String title,
         String summary,
-        String league,
+        String tag,
         LocalDateTime publishedAt,
-        int hotnessScore
+        int hotnessScore,
+        String url,
+        String source
 ) {
 }

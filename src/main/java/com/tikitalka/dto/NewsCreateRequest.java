@@ -1,13 +1,17 @@
 package com.tikitalka.dto;
 
-import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record NewsCreateRequest(
         String title,
+        String source,
+        @JsonProperty("publishedAt")
+        String publishedAtStr,
+        @JsonProperty("description")
         String summary,
-        String league,
-        LocalDateTime publishedAt,
-        int hotnessScore,
-        String originalContent
+        @JsonProperty("full_text")
+        String originalContent,
+        String url,
+        String tag
 ) {
 }

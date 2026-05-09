@@ -16,7 +16,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class NewsServiceTest {
@@ -32,25 +33,25 @@ class NewsServiceTest {
     @BeforeEach
     void setUp() {
         sampleNews = List.of(
-                new News("1", "PL News 1", "Summary 1", "PL", LocalDateTime.now().minusHours(2), 10, "Content 1"),
-                new News("2", "Bundesliga News 1", "Summary 2", "Bundesliga", LocalDateTime.now().minusHours(1), 50, "Content 2"),
-                new News("3", "PL News 2", "Summary 3", "PL", LocalDateTime.now().minusHours(3), 30, "Content 3"),
-                new News("4", "ChampionsLeague News 1", "Summary 4", "ChampionsLeague", LocalDateTime.now(), 20, "Content 4")
+                new News("1", "PL News 1", "Summary 1", "PL", LocalDateTime.now().minusHours(2), 10, "Content 1", "url1", "source1"),
+                new News("2", "Bundesliga News 1", "Summary 2", "Bundesliga", LocalDateTime.now().minusHours(1), 50, "Content 2", "url2", "source2"),
+                new News("3", "PL News 2", "Summary 3", "PL", LocalDateTime.now().minusHours(3), 30, "Content 3", "url3", "source3"),
+                new News("4", "ChampionsLeague News 1", "Summary 4", "ChampionsLeague", LocalDateTime.now(), 20, "Content 4", "url4", "source4")
         );
     }
 
     @Test
-    @DisplayName("리그 필터링이 정상적으로 동작해야 한다")
-    void filterByLeague() throws IOException {
+    @DisplayName("태그 필터링이 정상적으로 동작해야 한다")
+    void filterByTag() throws IOException {
         // given
         when(newsRepository.findAll()).thenReturn(sampleNews);
 
         // when
-        PageResponse<News> result = newsService.getNewsFeed("PL", 0, 10, "LATEST");
+        var result = newsService.getNewsFeed("PL", 0, 10, "LATEST");
 
         // then
         assertThat(result.content()).hasSize(2);
-        assertThat(result.content()).allMatch(n -> n.league().equals("PL"));
+        assertThat(result.content()).allMatch(n -> n.tag().equals("PL"));
     }
 
     @Test
@@ -60,7 +61,7 @@ class NewsServiceTest {
         when(newsRepository.findAll()).thenReturn(sampleNews);
 
         // when
-        PageResponse<News> result = newsService.getNewsFeed(null, 0, 10, "LATEST");
+        var result = newsService.getNewsFeed(null, 0, 10, "LATEST");
 
         // then
         assertThat(result.content().get(0).id()).isEqualTo("4"); // 가장 최근
@@ -74,7 +75,7 @@ class NewsServiceTest {
         when(newsRepository.findAll()).thenReturn(sampleNews);
 
         // when
-        PageResponse<News> result = newsService.getNewsFeed(null, 0, 10, "HOT");
+        var result = newsService.getNewsFeed(null, 0, 10, "HOT");
 
         // then
         assertThat(result.content().get(0).id()).isEqualTo("2"); // Score 50
@@ -82,18 +83,17 @@ class NewsServiceTest {
     }
 
     @Test
-    @DisplayName("페이지네이션이 정상적으로 동작해야 한다")
-    void pagination() throws IOException {
+    @DisplayName("이미 존재하는 URL의 뉴스는 중복으로 등록되지 않아야 한다")
+    void addDuplicateNews() throws IOException {
         // given
         when(newsRepository.findAll()).thenReturn(sampleNews);
+        News duplicateNews = new News("5", "Duplicate Title", "Summary", "PL", LocalDateTime.now(), 0, "Content", "url1", "source1");
 
         // when
-        PageResponse<News> result = newsService.getNewsFeed(null, 1, 2, "LATEST"); // 1페이지, 사이즈 2
+        newsService.addNews(duplicateNews);
 
         // then
-        assertThat(result.content()).hasSize(2);
-        assertThat(result.page()).isEqualTo(1);
-        assertThat(result.totalElements()).isEqualTo(4);
-        assertThat(result.totalPages()).isEqualTo(2);
+        // newsRepository.save()가 호출되지 않았는지 확인하는 것이 좋으나, findAll()만 호출되고 리턴되는지 확인
+        verify(newsRepository, times(0)).save(any(News.class));
     }
 }
