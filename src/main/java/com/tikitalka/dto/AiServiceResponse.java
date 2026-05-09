@@ -1,11 +1,9 @@
 package com.tikitalka.dto;
 
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record AiServiceResponse(
-        String type,
-        String title,
-        String content,
-        List<String> relatedQuestions,
-        List<Source> sources
+        @JsonProperty("session_id") String sessionId,
+        String reply,
+        @JsonProperty("suggested_question") String suggestedQuestion
 ) {}

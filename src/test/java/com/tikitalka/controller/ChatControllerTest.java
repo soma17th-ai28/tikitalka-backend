@@ -52,8 +52,8 @@ class ChatControllerTest {
     void getHistory_정상요청_200_반환() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         List<ChatMessage> messages = List.of(
-                new ChatMessage("device1", "user", "안녕", now, null, null, null, null),
-                new ChatMessage("device1", "assistant", "안녕하세요", now, "SOCCER_DOMAIN", "제목", List.of(), List.of())
+                new ChatMessage("device1", "user", "안녕", now, null),
+                new ChatMessage("device1", "assistant", "안녕하세요", now, "다음 질문")
         );
         when(chatHistoryService.getAll("device1")).thenReturn(messages);
 
@@ -79,8 +79,7 @@ class ChatControllerTest {
     void sendMessage_정상요청_200_반환() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         ChatResponse response = new ChatResponse(
-                "assistant", "SOCCER_DOMAIN", "축구 정보",
-                "AI 응답입니다.", List.of("관련 질문1"), List.of(), now
+                "assistant", "AI 응답입니다.", "관련 질문1", now
         );
         when(chatPipelineService.process(anyString(), anyString())).thenReturn(response);
 
@@ -91,7 +90,6 @@ class ChatControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("assistant"))
-                .andExpect(jsonPath("$.type").value("SOCCER_DOMAIN"))
                 .andExpect(jsonPath("$.content").value("AI 응답입니다."));
     }
 
@@ -118,11 +116,9 @@ class ChatControllerTest {
     }
 
     @Test
-    void sendMessage_GENERAL_응답_null_title_JSON에_미포함() throws Exception {
+    void sendMessage_suggestedQuestion_null이면_JSON에_미포함() throws Exception {
         LocalDateTime now = LocalDateTime.now();
-        ChatResponse response = new ChatResponse(
-                "assistant", "GENERAL", null, "축구 관련 질문을 해주세요.", List.of(), List.of(), now
-        );
+        ChatResponse response = new ChatResponse("assistant", "축구 관련 질문을 해주세요.", null, now);
         when(chatPipelineService.process(anyString(), anyString())).thenReturn(response);
 
         ChatRequest request = new ChatRequest("device1", "날씨 알려줘");
@@ -131,15 +127,13 @@ class ChatControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").doesNotExist());
+                .andExpect(jsonPath("$.suggestedQuestion").doesNotExist());
     }
 
     @Test
     void sendMessage_응답에_timestamp_포함() throws Exception {
         LocalDateTime now = LocalDateTime.now();
-        ChatResponse response = new ChatResponse(
-                "assistant", "SOCCER_DOMAIN", "제목", "응답", List.of(), List.of(), now
-        );
+        ChatResponse response = new ChatResponse("assistant", "응답", "질문", now);
         when(chatPipelineService.process(anyString(), anyString())).thenReturn(response);
 
         ChatRequest request = new ChatRequest("device1", "질문");

@@ -3,10 +3,8 @@ google:
     application-name: tikitoka-db
     spreadsheet-id: 1_bjbG6TIhPJozYdox5pSg8Voyk6HINAjtGTGYOXeMwI
     credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:./secrets/tikitoka-495701-927433d85001.json}
-    range: Sheet1!A:H
+    range: Chat!A:E
 ai:
   service:
     url: ${AI_SERVICE_URL:http://localhost:8000}
     mock: true
-chat:
-  max-context-messages: 40

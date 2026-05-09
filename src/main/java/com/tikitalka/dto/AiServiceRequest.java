@@ -1,5 +1,8 @@
 package com.tikitalka.dto;
 
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-public record AiServiceRequest(List<Message> messages, String userMessage) {}
+public record AiServiceRequest(
+        @JsonProperty("session_id") String sessionId,
+        String message
+) {}

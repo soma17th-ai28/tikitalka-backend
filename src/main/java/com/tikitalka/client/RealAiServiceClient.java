@@ -7,6 +7,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
+
 @Component
 @ConditionalOnProperty(name = "ai.service.mock", havingValue = "false")
 public class RealAiServiceClient implements AiServiceClient {
@@ -21,10 +23,11 @@ public class RealAiServiceClient implements AiServiceClient {
     @Override
     public AiServiceResponse call(AiServiceRequest request) {
         return webClient.post()
-                .uri("/ai/chat")
+                .uri("/chat")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(AiServiceResponse.class)
+                .timeout(Duration.ofSeconds(90))
                 .block();
     }
 }

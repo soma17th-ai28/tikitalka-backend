@@ -78,6 +78,6 @@ class ChatHistoryServiceTest {
     }
 
     private ChatMessage makeMessage(String deviceId, String role, String content) {
-        return new ChatMessage(deviceId, role, content, LocalDateTime.now(), null, null, null, null);
+        return new ChatMessage(deviceId, role, content, LocalDateTime.now(), null);
     }
 }

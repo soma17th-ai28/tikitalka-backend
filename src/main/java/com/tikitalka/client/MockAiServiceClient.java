@@ -18,24 +18,20 @@ public class MockAiServiceClient implements AiServiceClient {
 
     @Override
     public AiServiceResponse call(AiServiceRequest request) {
-        String userMessage = request.userMessage().toLowerCase();
-        boolean isSoccer = SOCCER_KEYWORDS.stream().anyMatch(userMessage::contains);
+        String message = request.message().toLowerCase();
+        boolean isSoccer = SOCCER_KEYWORDS.stream().anyMatch(message::contains);
 
         if (isSoccer) {
             return new AiServiceResponse(
-                    "SOCCER_DOMAIN",
-                    "축구 정보",
+                    request.sessionId(),
                     "[Mock] 축구 관련 질문이시군요! AI 서비스 연동 전 임시 응답입니다.",
-                    List.of("최근 챔피언스리그 결과는?", "이번 시즌 득점왕은?"),
-                    List.of()
+                    "최근 챔피언스리그 결과가 궁금하신가요?"
             );
         } else {
             return new AiServiceResponse(
-                    "GENERAL",
-                    null,
+                    request.sessionId(),
                     "[Mock] 저는 축구 전문 챗봇입니다. 축구 관련 질문을 해주세요!",
-                    List.of(),
-                    List.of()
+                    null
             );
         }
     }

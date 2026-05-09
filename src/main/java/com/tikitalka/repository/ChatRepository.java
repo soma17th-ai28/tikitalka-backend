@@ -1,12 +1,10 @@
 package com.tikitalka.repository;
 
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.tikitalka.config.GoogleSheetsProperties;
 import com.tikitalka.dto.ChatMessage;
-import com.tikitalka.dto.Source;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -32,23 +30,12 @@ public class ChatRepository {
 
     public void append(ChatMessage message) {
         try {
-            String relatedQJson = message.relatedQuestions() != null
-                    ? objectMapper.writeValueAsString(message.relatedQuestions())
-                    : "";
-
-            String sourcesJson = message.sources() != null
-                    ? objectMapper.writeValueAsString(message.sources())
-                    : "";
-
             List<Object> row = List.of(
                     message.deviceId(),
                     message.role(),
                     message.content(),
                     message.timestamp().toString(),
-                    nullToEmpty(message.type()),
-                    nullToEmpty(message.title()),
-                    relatedQJson,
-                    sourcesJson
+                    nullToEmpty(message.suggestedQuestion())
             );
 
             ValueRange body = new ValueRange().setValues(List.of(row));
@@ -86,32 +73,16 @@ public class ChatRepository {
                     continue;
                 }
 
-                String relatedQJson = row.size() > 6 ? row.get(6).toString() : "";
-                String sourcesJson = row.size() > 7 ? row.get(7).toString() : "";
-
-                List<String> relatedQuestions = relatedQJson.isBlank()
-                        ? null
-                        : objectMapper.readValue(
-                        relatedQJson,
-                        new TypeReference<List<String>>() {}
-                );
-
-                List<Source> sources = sourcesJson.isBlank()
-                        ? null
-                        : objectMapper.readValue(
-                        sourcesJson,
-                        new TypeReference<List<Source>>() {}
-                );
+                String suggestedQuestion = row.size() > 4
+                        ? emptyToNull(row.get(4).toString())
+                        : null;
 
                 result.add(new ChatMessage(
                         row.get(0).toString(),
                         row.get(1).toString(),
                         row.get(2).toString(),
                         LocalDateTime.parse(row.get(3).toString()),
-                        row.size() > 4 ? emptyToNull(row.get(4).toString()) : null,
-                        row.size() > 5 ? emptyToNull(row.get(5).toString()) : null,
-                        relatedQuestions,
-                        sources
+                        suggestedQuestion
                 ));
             }
 
