@@ -1,3 +1,6 @@
+server:
+  address: 0.0.0.0
+
 google:
   sheets:
     application-name: tikitoka-db
@@ -8,4 +11,4 @@ google:
 ai:
   service:
     url: ${AI_SERVICE_URL:http://localhost:8000}
-    mock: false
+    mock: true
