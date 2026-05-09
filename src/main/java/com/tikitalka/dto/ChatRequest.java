@@ -1,4 +1,3 @@
 package com.tikitalka.dto;
 
-public class ChatRequest {
-}
+public record ChatRequest(String deviceId, String message) {}

@@ -27,7 +27,7 @@ public class NewsRepository {
 
     public List<News> findAll() throws IOException {
         ValueRange response = sheets.spreadsheets().values()
-                .get(properties.spreadsheetId(), properties.range())
+                .get(properties.spreadsheetId(), properties.newsRange())
                 .execute();
 
         List<List<Object>> values = response.getValues();
@@ -45,7 +45,7 @@ public class NewsRepository {
         ValueRange body = new ValueRange().setValues(List.of(row));
 
         sheets.spreadsheets().values()
-                .append(properties.spreadsheetId(), properties.range(), body)
+                .append(properties.spreadsheetId(), properties.newsRange(), body)
                 .setValueInputOption("RAW")
                 .execute();
     }

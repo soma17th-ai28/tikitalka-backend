@@ -7,6 +7,7 @@ public record GoogleSheetsProperties(
         String applicationName,
         String spreadsheetId,
         String credentialsPath,
-        String range
+        String range,
+        String newsRange
 ) {
 }

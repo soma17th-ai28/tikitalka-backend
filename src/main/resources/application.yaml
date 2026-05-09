@@ -3,4 +3,9 @@ google:
     application-name: tikitoka-db
     spreadsheet-id: 1_bjbG6TIhPJozYdox5pSg8Voyk6HINAjtGTGYOXeMwI
     credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:./secrets/tikitoka-495701-927433d85001.json}
-    range: News!A:I
+    range: Chat!A:E
+    news-range: News!A:I
+ai:
+  service:
+    url: ${AI_SERVICE_URL:http://localhost:8000}
+    mock: true
