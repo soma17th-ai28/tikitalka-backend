@@ -23,7 +23,7 @@ MAX_TURNS = 10
 UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 UPSTAGE_API_URL = "https://api.upstage.ai/v1/chat/completions"
 UPSTAGE_MODEL = "solar-pro"
-SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+SERPER_API_KEY = os.getenv("NEWSDATA_API_KEY", "")
 SERPER_API_URL = "https://google.serper.dev/news"
 NEWS_NEED_PATTERN = re.compile(r"\[NEED_NEWS:\s*(.+?)\]")
 
