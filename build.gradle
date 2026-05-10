@@ -19,7 +19,6 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	implementation 'com.fasterxml.jackson.core:jackson-databind'
 	implementation 'com.google.apis:google-api-services-sheets:v4-rev20260213-2.0.0'
 	implementation 'com.google.auth:google-auth-library-oauth2-http:1.47.0'
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
