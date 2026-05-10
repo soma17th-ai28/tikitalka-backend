@@ -8,6 +8,6 @@ public record GoogleSheetsProperties(
         String spreadsheetId,
         String credentialsPath,
         String range,
-        String newsRange
+        String newsRange // 뉴스용 범위 추가
 ) {
 }

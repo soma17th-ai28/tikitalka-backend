@@ -24,7 +24,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleServerError(RuntimeException e) {
+        e.printStackTrace(); // 서버 로그에도 출력
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "서버 오류가 발생했습니다."));
+                .body(Map.of("error", "서버 오류: " + e.getMessage()));
     }
 }
