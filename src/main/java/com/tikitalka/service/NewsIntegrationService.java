@@ -18,10 +18,56 @@ public class NewsIntegrationService {
 
     private final SolarAiService solarAiService;
 
-    public NewsIntegrationService(NewsCollectorService collectorService, RawNewsRepository rawNewsRepository, SolarAiService solarAiService) {
+    private final NewsRepository newsRepository;
+
+    public NewsIntegrationService(NewsCollectorService collectorService, RawNewsRepository rawNewsRepository, SolarAiService solarAiService, NewsRepository newsRepository) {
         this.collectorService = collectorService;
         this.rawNewsRepository = rawNewsRepository;
         this.solarAiService = solarAiService;
+        this.newsRepository = newsRepository;
+    }
+
+    public void runGlobalScoring() throws IOException {
+        List<RawNews> allRawNews = rawNewsRepository.findAll();
+        // 최근 24시간 내의 처리된 뉴스만 대상으로 함 (실제 구현 시 시간 필터링 추가 가능)
+        List<Map<String, Object>> metadataList = allRawNews.stream()
+                .filter(RawNews::isProcessed)
+                .map(n -> Map.of(
+                        "title", n.title(),
+                        "summary", n.summary(),
+                        "tag", n.tag(),
+                        "source", n.source(),
+                        "url", n.url()
+                ))
+                .toList();
+
+        List<Map<String, Object>> refinedEvents = solarAiService.analyzeNewsBatch(metadataList);
+
+        for (Map<String, Object> event : refinedEvents) {
+            String title = (String) event.get("title");
+            String summary = (String) event.get("summary");
+            String tag = (String) event.get("tag");
+            int hotnessScore = (int) event.get("hotnessScore");
+            String sources = (String) event.get("sources");
+            String url = (String) event.get("representativeUrl");
+
+            // 기존 뉴스 피드에 동일 제목 혹은 유사 사건이 있는지 확인 로직 필요
+            // 여기서는 단순화를 위해 새로운 뉴스 객체로 변환하여 저장
+            com.tikitalka.model.News news = new com.tikitalka.model.News(
+                    java.util.UUID.randomUUID().toString(),
+                    title,
+                    summary,
+                    tag,
+                    LocalDateTime.now(),
+                    hotnessScore,
+                    "Sources: " + sources,
+                    url,
+                    sources
+            );
+
+            // 기존 NewsRepository를 사용하여 저장 (이미 있으면 업데이트하는 로직은 Repository 고도화 필요)
+            newsRepository.save(news);
+        }
     }
 
     public void processRawNewsMetadata() throws IOException {

@@ -63,4 +63,64 @@ public class SolarAiService {
         }
         return Map.of();
     }
+
+    public List<Map<String, Object>> analyzeNewsBatch(List<Map<String, Object>> newsMetadataList) {
+        if (newsMetadataList.isEmpty()) return List.of();
+
+        String newsListJson;
+        try {
+            newsListJson = objectMapper.writeValueAsString(newsMetadataList);
+        } catch (JsonProcessingException e) {
+            return List.of();
+        }
+
+        String prompt = String.format(
+                "You are a professional football chief editor. Analyze today's news list and merge related articles into single 'events'.\n" +
+                "For each event, provide a unified summary, a representative tag, and a hotnessScore (1-100).\n" +
+                "Scoring Criteria:\n" +
+                "- Base Impact: AI's judgment on the event's importance.\n" +
+                "- Coverage Bonus: Higher score if reported by many sources.\n" +
+                "- League Priority: EPL and UCL get +15 points.\n\n" +
+                "News List:\n%s\n\n" +
+                "Respond ONLY with a JSON array of objects: [{\"title\": \"...\", \"summary\": \"...\", \"tag\": \"...\", \"hotnessScore\": 85, \"sources\": \"BBC, Sky Sports\", \"representativeUrl\": \"...\"}]",
+                newsListJson);
+
+        Map<String, Object> requestBody = Map.of(
+                "model", "solar-1-mini-chat",
+                "messages", List.of(
+                        Map.of("role", "user", "content", prompt)
+                ),
+                "response_format", Map.of("type", "json_object")
+        );
+
+        Map<String, Object> response = webClient.post()
+                .uri("/chat/completions")
+                .header("Authorization", "Bearer " + solarApiKey)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block();
+
+        if (response != null && response.containsKey("choices")) {
+            List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
+            String aiResponseJson = (String) ((Map<String, Object>) choices.get(0).get("message")).get("content");
+            try {
+                // The AI might wrap the array in an object, let's try to handle both
+                Map<String, Object> resultMap = objectMapper.readValue(aiResponseJson, Map.class);
+                if (resultMap.containsKey("events")) {
+                    return (List<Map<String, Object>>) resultMap.get("events");
+                }
+                // If it returned a raw array (as requested in some prompts)
+                return objectMapper.readValue(aiResponseJson, List.class);
+            } catch (Exception e) {
+                // Fallback: try to parse as list directly if map fails
+                try {
+                    return objectMapper.readValue(aiResponseJson, List.class);
+                } catch (Exception e2) {
+                    return List.of();
+                }
+            }
+        }
+        return List.of();
+    }
 }
