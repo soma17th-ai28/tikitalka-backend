@@ -16,9 +16,40 @@ public class NewsIntegrationService {
     private final NewsCollectorService collectorService;
     private final RawNewsRepository rawNewsRepository;
 
-    public NewsIntegrationService(NewsCollectorService collectorService, RawNewsRepository rawNewsRepository) {
+    private final SolarAiService solarAiService;
+
+    public NewsIntegrationService(NewsCollectorService collectorService, RawNewsRepository rawNewsRepository, SolarAiService solarAiService) {
         this.collectorService = collectorService;
         this.rawNewsRepository = rawNewsRepository;
+        this.solarAiService = solarAiService;
+    }
+
+    public void processRawNewsMetadata() throws IOException {
+        List<RawNews> allRawNews = rawNewsRepository.findAll();
+        List<RawNews> unprocessedNews = allRawNews.stream()
+                .filter(n -> !n.isProcessed())
+                .toList();
+
+        for (RawNews news : unprocessedNews) {
+            Map<String, Object> aiResult = solarAiService.analyzeNews(news.title(), news.fullContent());
+
+            if (aiResult.isEmpty()) {
+                continue;
+            }
+
+            RawNews processedNews = new RawNews(
+                    news.url(),
+                    news.title(),
+                    news.source(),
+                    news.publishedAt(),
+                    news.fullContent(),
+                    (String) aiResult.get("summary"),
+                    (String) aiResult.get("tag"),
+                    true
+            );
+
+            rawNewsRepository.update(processedNews);
+        }
     }
 
     public void collectAndStoreRawNews(String query) throws IOException {

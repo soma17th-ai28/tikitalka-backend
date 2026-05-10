@@ -52,9 +52,23 @@ public class RawNewsRepository {
     }
 
     public void update(RawNews news) throws IOException {
-        // 실제 운영 환경에서는 인덱스 기반 업데이트가 필요하지만, 
-        // 구글 시트 특성상 전체 데이터를 다시 쓰는 방식이 안전할 수 있음
-        // 여기서는 간단히 append를 사용하거나 특정 행 업데이트 로직이 필요함
+        List<RawNews> allNews = findAll();
+        int rowIndex = -1;
+        for (int i = 0; i < allNews.size(); i++) {
+            if (allNews.get(i).url().equals(news.url())) {
+                rowIndex = i + 1; // 1-based index (assuming no header, or adjust if there is)
+                break;
+            }
+        }
+
+        if (rowIndex != -1) {
+            String updateRange = "RawNews!A" + rowIndex + ":H" + rowIndex;
+            ValueRange body = new ValueRange().setValues(List.of(mapToRow(news)));
+            sheets.spreadsheets().values()
+                    .update(properties.spreadsheetId(), updateRange, body)
+                    .setValueInputOption("RAW")
+                    .execute();
+        }
     }
 
     private RawNews mapToRawNews(List<Object> row) {
