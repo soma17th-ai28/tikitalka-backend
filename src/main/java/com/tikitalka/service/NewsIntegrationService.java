@@ -27,33 +27,75 @@ public class NewsIntegrationService {
         this.newsRepository = newsRepository;
     }
 
-    public void runGlobalScoring() throws IOException {
-        List<RawNews> allRawNews = rawNewsRepository.findAll();
-        // 최근 24시간 내의 처리된 뉴스만 대상으로 함 (실제 구현 시 시간 필터링 추가 가능)
-        List<Map<String, Object>> metadataList = allRawNews.stream()
-                .filter(RawNews::isProcessed)
-                .map(n -> Map.of(
-                        "title", n.title(),
-                        "summary", n.summary(),
-                        "tag", n.tag(),
-                        "source", n.source(),
-                        "url", n.url()
-                ))
-                .toList();
+    public void runGlobalScoring() {
+        try {
+            List<RawNews> allRawNews = rawNewsRepository.findAll();
+            LocalDateTime twelveHoursAgo = LocalDateTime.now().minusHours(12);
 
-        List<Map<String, Object>> refinedEvents = solarAiService.analyzeNewsBatch(metadataList);
+            List<Map<String, Object>> metadataList = allRawNews.stream()
+                    .filter(n -> n.isProcessed() && n.publishedAt().isAfter(twelveHoursAgo))
+                    .map(n -> Map.of(
+                            "title", n.title(),
+                            "summary", n.summary(),
+                            "tag", n.tag(),
+                            "source", n.source(),
+                            "url", n.url()
+                    ))
+                    .toList();
 
-        for (Map<String, Object> event : refinedEvents) {
-            String title = (String) event.get("title");
-            String summary = (String) event.get("summary");
-            String tag = (String) event.get("tag");
-            int hotnessScore = (int) event.get("hotnessScore");
-            String sources = (String) event.get("sources");
-            String url = (String) event.get("representativeUrl");
+            if (metadataList.isEmpty()) {
+                return;
+            }
 
-            // 기존 뉴스 피드에 동일 제목 혹은 유사 사건이 있는지 확인 로직 필요
-            // 여기서는 단순화를 위해 새로운 뉴스 객체로 변환하여 저장
-            com.tikitalka.model.News news = new com.tikitalka.model.News(
+            List<Map<String, Object>> refinedEvents = solarAiService.analyzeNewsBatch(metadataList);
+
+            for (Map<String, Object> event : refinedEvents) {
+                try {
+                    processRefinedEvent(event);
+                } catch (Exception e) {
+                    // 개별 이벤트 처리 실패 시 로그 기록 후 계속 진행
+                    System.err.println("Failed to process refined event: " + e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Global scoring failed: " + e.getMessage());
+        }
+    }
+
+    private void processRefinedEvent(Map<String, Object> event) throws IOException {
+        String title = (String) event.get("title");
+        String summary = (String) event.get("summary");
+        String tag = (String) event.get("tag");
+        Object hotnessScoreObj = event.get("hotnessScore");
+        int hotnessScore = (hotnessScoreObj instanceof Integer) ? (Integer) hotnessScoreObj : Integer.parseInt(hotnessScoreObj.toString());
+        String sources = (String) event.get("sources");
+        String url = (String) event.get("representativeUrl");
+
+        List<com.tikitalka.model.News> existingNewsFeed = newsRepository.findAll();
+        
+        // 제목 유사도나 URL로 기존 뉴스 검색 (간단히 제목 일치로 체크)
+        com.tikitalka.model.News existing = existingNewsFeed.stream()
+                .filter(n -> n.title().equals(title) || n.url().equals(url))
+                .findFirst()
+                .orElse(null);
+
+        if (existing != null) {
+            // 기존 뉴스 업데이트 (점수 및 소스 갱신)
+            com.tikitalka.model.News updatedNews = new com.tikitalka.model.News(
+                    existing.id(),
+                    title,
+                    summary,
+                    tag,
+                    existing.publishedAt(), // 최초 발행일 유지
+                    hotnessScore,
+                    "Sources: " + sources,
+                    url,
+                    sources
+            );
+            newsRepository.update(updatedNews);
+        } else {
+            // 신규 뉴스 저장
+            com.tikitalka.model.News newNews = new com.tikitalka.model.News(
                     java.util.UUID.randomUUID().toString(),
                     title,
                     summary,
@@ -64,9 +106,7 @@ public class NewsIntegrationService {
                     url,
                     sources
             );
-
-            // 기존 NewsRepository를 사용하여 저장 (이미 있으면 업데이트하는 로직은 Repository 고도화 필요)
-            newsRepository.save(news);
+            newsRepository.save(newNews);
         }
     }
 

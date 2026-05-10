@@ -45,10 +45,31 @@ public class NewsRepository {
         ValueRange body = new ValueRange().setValues(List.of(row));
 
         sheets.spreadsheets().values()
-                .append(properties.spreadsheetId(), properties.newsRange(), body)
+                .append(properties.spreadsheetId(), properties.range(), body)
                 .setValueInputOption("RAW")
                 .execute();
     }
+
+    public void update(News news) throws IOException {
+        List<News> allNews = findAll();
+        int rowIndex = -1;
+        for (int i = 0; i < allNews.size(); i++) {
+            if (allNews.get(i).id().equals(news.id())) {
+                rowIndex = i + 1;
+                break;
+            }
+        }
+
+        if (rowIndex != -1) {
+            String updateRange = properties.range().replace("A:I", "A" + rowIndex + ":I" + rowIndex);
+            ValueRange body = new ValueRange().setValues(List.of(mapToRow(news)));
+            sheets.spreadsheets().values()
+                    .update(properties.spreadsheetId(), updateRange, body)
+                    .setValueInputOption("RAW")
+                    .execute();
+        }
+    }
+
 
     private News mapToNews(List<Object> row) {
         return new News(
