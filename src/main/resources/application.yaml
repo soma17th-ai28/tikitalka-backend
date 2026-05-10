@@ -11,4 +11,4 @@ google:
 ai:
   service:
     url: ${AI_SERVICE_URL:http://localhost:8000}
-    mock: true
+    mock: false
