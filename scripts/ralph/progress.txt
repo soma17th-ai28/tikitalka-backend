@@ -1,0 +1,91 @@
+## Codebase Patterns
+- Project is Python FastAPI at the soccer/ root (main.py)
+- Pydantic v2 style validators: use @field_validator with @classmethod
+- mypy is the available typecheck tool (pyright not installed)
+- Run checks: `python -m mypy main.py --ignore-missing-imports`
+- Start server: `python -m uvicorn main:app --host 0.0.0.0 --port 8000`
+- tikitalka-backend/ is an empty Spring Boot skeleton — all new code goes in soccer/ root
+- Upstage API endpoint: https://api.upstage.ai/v1/chat/completions, model: solar-pro (OpenAI-compatible)
+- LLM response parsing: structured REPLY:/SUGGEST: format in system prompt; parse_llm_response() extracts both fields
+- End-signal detection: check if any END_SIGNALS keyword appears in lowercased user message
+- httpx.AsyncClient used for async LLM calls; raise HTTPException(502) on httpx errors
+- Newsdata.io API: GET https://newsdata.io/api/1/news?apikey=&q=&language=en,ko&size=3; results[].title/description
+- News fallback pattern: LLM emits [NEED_NEWS: keyword] → fetch_news() → inject as system message → re-call LLM
+
+---
+
+# Ralph Progress Log
+Started: Fri May  8 21:56:07     2026
+---
+
+## 2026-05-08 - US-001
+- Implemented POST /chat endpoint with FastAPI
+- ChatRequest (session_id, message) + ChatResponse (session_id, reply, suggested_question) Pydantic models
+- field_validator ensures non-empty strings (returns 422 on missing/empty fields)
+- CORSMiddleware added for mobile app integration
+- requirements.txt created with fastapi, uvicorn[standard], httpx, python-dotenv
+- Files changed: main.py (new), requirements.txt (new), scripts/ralph/prd.json (new)
+- **Learnings for future iterations:**
+  - Pydantic v2 uses @field_validator + @classmethod, not @validator
+  - mypy works for typecheck: `python -m mypy main.py --ignore-missing-imports`
+  - Server successfully tested: POST /chat returns 200 with correct schema, missing fields return 422
+  - tikitalka-backend/ has empty Java stubs — ignore for this Python project
+---
+
+## 2026-05-08 - US-002
+- Added in-memory session store: `sessions: dict[str, list[Message]]` keyed by session_id
+- Defined `Message` TypedDict with `role` and `content` fields
+- `save_turn()` appends user+assistant messages and trims to last 10 turns (20 messages)
+- `get_history()` returns prior messages for a session; wired into chat handler (passed to LLM in US-003)
+- MAX_TURNS constant set to 10 (easy to adjust)
+- Files changed: main.py
+- **Learnings for future iterations:**
+  - `sessions` dict is module-level — different session_ids are truly independent
+  - History is sliced as `history[-(MAX_TURNS * 2):]` to keep exactly 10 user+assistant pairs
+  - `sessions.setdefault(session_id, [])` avoids KeyError on first request for a session
+  - `_ = history` used temporarily until LLM wiring in US-003 (avoids unused-variable lint)
+---
+
+## 2026-05-08 - US-003
+- Integrated Upstage Solar LLM via httpx (OpenAI-compatible API at https://api.upstage.ai/v1/chat/completions)
+- Added SYSTEM_PROMPT: soccer expert friend persona, enforces REPLY:/SUGGEST: output format
+- `call_upstage()`: builds messages list with system prompt + history + user message, calls API, parses response
+- `parse_llm_response()`: extracts REPLY (≤2 lines) and SUGGEST from LLM output; returns suggested_question=None on end signal or SUGGEST:NONE
+- `is_end_signal()`: checks if user message contains any of END_SIGNALS (끝, 종료, bye, 고마워, etc.)
+- HTTPException(502) raised on httpx.HTTPStatusError or httpx.RequestError
+- load_dotenv() called at startup to read UPSTAGE_API_KEY from .env
+- Files changed: main.py
+- **Learnings for future iterations:**
+  - Upstage API is OpenAI-compatible: same /v1/chat/completions path, Bearer token auth, same messages format
+  - `data = response.json()` returns Any; annotate extracted fields explicitly (`content: str = ...`) for mypy
+  - Structured output via system prompt (REPLY:/SUGGEST:) is more reliable than asking for JSON for this model
+  - parse_llm_response takes `end_signal: bool` so suggested_question is suppressed even if LLM forgets NONE
+---
+
+## 2026-05-08 - US-004
+- Added Newsdata.io news API fallback: detect [NEED_NEWS: keyword] in LLM response, fetch top 3 articles, inject as system message, re-call LLM
+- Added NEWSDATA_API_KEY, NEWSDATA_API_URL, NEWS_NEED_PATTERN constants
+- Added extract_news_keyword() using regex to parse [NEED_NEWS: ...] tag
+- Added async fetch_news(): GET newsdata.io/api/1/news, returns formatted top-3 titles+summaries; returns None on any failure (graceful fallback)
+- Updated call_upstage(): after first LLM response, check for news request; if present and news available, build messages_with_news and re-call
+- Updated SYSTEM_PROMPT to instruct LLM to emit [NEED_NEWS: keyword] when current news is needed
+- Files changed: main.py, scripts/ralph/prd.json, scripts/ralph/progress.txt
+- **Learnings for future iterations:**
+  - fetch_news() returns None when NEWSDATA_API_KEY is empty or any error occurs — caller uses original content as fallback
+  - News is injected as a second "system" role message (not "user") to avoid confusing conversation flow
+  - `dict[str, Any]` annotation on response.json() result is needed for mypy to accept .get() calls on it
+  - `list[Any]` on articles allows .get() on each article dict without mypy complaints
+---
+
+## 2026-05-08 - US-005
+- Created .env.example with UPSTAGE_API_KEY and NEWSDATA_API_KEY key names (no values)
+- Created .env with placeholder values (gitignored)
+- Created root .gitignore: .env, __pycache__/, *.pyc, .mypy_cache/
+- Created README.md with 3-line install+run instructions (cp .env.example → pip install → uvicorn)
+- requirements.txt already had all required packages from US-001 (fastapi, uvicorn, httpx, python-dotenv)
+- Files changed: .env.example (new), .env (new), .gitignore (new), README.md (new), scripts/ralph/prd.json
+- **Learnings for future iterations:**
+  - requirements.txt was already complete from US-001 — no changes needed
+  - .env is gitignored; only .env.example is committed to keep secrets out of VCS
+  - README.md kept intentionally minimal (3 lines) per acceptance criteria
+---

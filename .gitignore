@@ -42,3 +42,16 @@ secrets/
 백엔드_개발계획서.md
 프론트_API_명세.md
 CLAUDE.md
+
+### Python / FastAPI ###
+.env
+__pycache__/
+*.pyc
+.mypy_cache/
+.claude/
+scripts/ralph/
+tasks/
+scripts/test_*.py
+scripts/quick_*.py
+news_debug.json
+test_response.json
