@@ -5,6 +5,8 @@ import com.tikitalka.dto.NewsSummaryResponse;
 import com.tikitalka.dto.PageResponse;
 import com.tikitalka.model.News;
 import com.tikitalka.repository.NewsRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 @Service
 public class NewsService {
 
+    private static final Logger log = LoggerFactory.getLogger(NewsService.class);
     private final NewsRepository newsRepository;
 
     public NewsService(NewsRepository newsRepository) {
@@ -22,55 +25,53 @@ public class NewsService {
     }
 
     public PageResponse<NewsSummaryResponse> getNewsFeed(String tag, int page, int size, String sortBy) throws IOException {
-        System.out.println("\n[NewsFeedAPI] 📱 뉴스 피드 요청 수신 [태그: " + (tag != null ? tag : "전체") + ", 정렬: " + sortBy + ", 페이지: " + page + "]");
+        log.info("[NewsFeedAPI] 뉴스 피드 요청 - tag={}, page={}, size={}, sortBy={}", tag, page, size, sortBy);
         
         List<News> allNews = newsRepository.findAll();
-        System.out.println("[NewsFeedAPI] 📂 DB에서 총 " + allNews.size() + "건의 뉴스 로드 완료");
 
         // Filtering
         List<News> filteredNews = allNews.stream()
                 .filter(n -> tag == null || tag.isEmpty() || n.tag().equalsIgnoreCase(tag))
                 .collect(Collectors.toList());
-        
-        System.out.println("[NewsFeedAPI] 🔍 필터링 결과: " + filteredNews.size() + "건 생존");
 
         // Sorting
         if ("HOT".equalsIgnoreCase(sortBy)) {
-            System.out.println("[NewsFeedAPI] 🔥 화제성(Hotness) 순으로 정렬 중...");
             filteredNews.sort(Comparator.comparingInt(News::hotnessScore).reversed());
         } else {
-            System.out.println("[NewsFeedAPI] 🕒 최신순(Latest)으로 정렬 중...");
             filteredNews.sort(Comparator.comparing(News::publishedAt).reversed());
         }
 
-        // Pagination
         int totalElements = filteredNews.size();
-        int fromIndex = Math.min(page * size, totalElements);
-        int toIndex = Math.min(fromIndex + size, totalElements);
+        int start = page * size;
+        int end = Math.min(start + size, totalElements);
 
-        List<NewsSummaryResponse> content = filteredNews.subList(fromIndex, toIndex).stream()
+        if (start >= totalElements) {
+            return PageResponse.of(List.of(), page, size, totalElements);
+        }
+
+        List<NewsSummaryResponse> content = filteredNews.subList(start, end).stream()
                 .map(n -> new NewsSummaryResponse(
                         n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.url(), n.source()
                 ))
                 .collect(Collectors.toList());
 
-        System.out.println("[NewsFeedAPI] ✅ 응답 생성 완료: " + content.size() + "건 반환 예정 (Total: " + totalElements + ")");
+        log.info("[NewsFeedAPI] 뉴스 피드 응답 완료 - totalElements={}, returnedCount={}", totalElements, content.size());
         return PageResponse.of(content, page, size, totalElements);
     }
 
     public NewsDetailResponse getNewsDetail(String id) throws IOException {
-        System.out.println("[NewsFeedAPI] 📄 뉴스 상세 조회 요청 [ID: " + id + "]");
+        log.info("[NewsFeedAPI] 뉴스 상세 조회 요청 - id={}", id);
         return newsRepository.findAll().stream()
                 .filter(n -> n.id().equals(id))
                 .findFirst()
                 .map(n -> {
-                    System.out.println("[NewsFeedAPI] ✅ 상세 데이터 발견: " + n.title());
+                    log.info("[NewsFeedAPI] 뉴스 상세 조회 완료 - title={}", n.title());
                     return new NewsDetailResponse(
                         n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.originalContent(), n.url(), n.source()
                     );
                 })
                 .orElseThrow(() -> {
-                    System.err.println("[NewsFeedAPI] ❌ 뉴스를 찾을 수 없음 [ID: " + id + "]");
+                    log.error("[NewsFeedAPI] 뉴스를 찾을 수 없음 - id={}", id);
                     return new RuntimeException("News not found: " + id);
                 });
     }

@@ -2,6 +2,8 @@ package com.tikitalka.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -13,6 +15,7 @@ import java.util.Map;
 @Service
 public class SolarAiService {
 
+    private static final Logger log = LoggerFactory.getLogger(SolarAiService.class);
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
@@ -30,6 +33,8 @@ public class SolarAiService {
     }
 
     public Map<String, Object> analyzeNews(String title, String content) {
+        log.info("[SolarAI] 단일 기사 분석 시작 - title={}", title);
+        
         String prompt = "너는 노련한 축구 기자야. 다음 기사를 분석해서 핵심만 전달해줘.\n\n" +
                 "**규칙:**\n" +
                 "1. **요약**: 반드시 **딱 1문장**으로만 기사의 핵심을 요약해.\n" +
@@ -37,7 +42,7 @@ public class SolarAiService {
                 "   - [EPL, LALIGA, BUNDESLIGA, SERIE_A, LIGUE1, CHAMPIONS_LEAGUE, EUROPA_LEAGUE, NOT_FOOTBALL]\n" +
                 "3. **말투**: 뉴스 보도 톤(~입니다).\n\n" +
                 "제목: " + title + "\n본문: " + content.substring(0, Math.min(content.length(), 1500)) + "\n\n" +
-                "JSON: {\"summary\": \"1문장 요약\", \"tag\": \"TAG_NAME\", \"hotnessScore\": 0~100}";
+                "응답 JSON 형식: {\"summary\": \"1문장 요약\", \"tag\": \"TAG_NAME\", \"hotnessScore\": 0~100}";
 
         Map<String, Object> requestBody = Map.of(
                 "model", "solar-1-mini-chat",
@@ -46,7 +51,7 @@ public class SolarAiService {
         );
 
         try {
-            return webClient.post()
+            Map<String, Object> result = webClient.post()
                     .uri(solarApiBaseUrl + "/chat/completions")
                     .header("Authorization", "Bearer " + solarApiKey)
                     .bodyValue(requestBody)
@@ -61,8 +66,11 @@ public class SolarAiService {
                         } catch (Exception e) { return Map.<String, Object>of(); }
                     })
                     .block();
+            
+            log.info("[SolarAI] 단일 기사 분석 완료 - title={}", title);
+            return result;
         } catch (Exception e) {
-            System.err.println("[SolarAI] 단일 요약 실패: " + e.getMessage());
+            log.error("[SolarAI] 단일 요약 실패 - error={}, title={}", e.getMessage(), title);
             return Map.of();
         }
     }
@@ -76,6 +84,8 @@ public class SolarAiService {
             newsListJson = objectMapper.writeValueAsString(newsMetadataList); 
             existingFeedsJson = objectMapper.writeValueAsString(existingFeeds);
         } catch (JsonProcessingException e) { return List.of(); }
+
+        log.info("[SolarAI] 주제 기반 통합 분석 요청 시작 - candidateCount={}, existingCount={}", newsMetadataList.size(), existingFeeds.size());
 
         String prompt = "너는 축구 전문 편집장이야. '새 뉴스'들을 분석하여 뉴스 피드를 업데이트해줘.\n\n" +
                 "**기존 뉴스 피드 (ID 포함):**\n" + existingFeedsJson + "\n\n" +
@@ -93,10 +103,8 @@ public class SolarAiService {
                 "response_format", Map.of("type", "json_object")
         );
 
-        System.out.println("[SolarAI] 주제 기반 통합 분석 요청 중...");
-
         try {
-            return webClient.post()
+            List<Map<String, Object>> events = webClient.post()
                     .uri(solarApiBaseUrl + "/chat/completions")
                     .header("Authorization", "Bearer " + solarApiKey)
                     .bodyValue(requestBody)
@@ -112,8 +120,11 @@ public class SolarAiService {
                         } catch (Exception e) { return List.<Map<String, Object>>of(); }
                     })
                     .block();
+            
+            log.info("[SolarAI] 주제 기반 통합 분석 완료 - resultCount={}", (events != null ? events.size() : 0));
+            return events;
         } catch (Exception e) {
-            System.err.println("[SolarAI] 배치 분석 실패: " + e.getMessage());
+            log.error("[SolarAI] 배치 분석 실패 - error={}", e.getMessage());
             return List.of();
         }
     }

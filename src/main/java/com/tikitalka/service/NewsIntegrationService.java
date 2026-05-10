@@ -3,6 +3,8 @@ package com.tikitalka.service;
 import com.tikitalka.model.RawNews;
 import com.tikitalka.repository.NewsRepository;
 import com.tikitalka.repository.RawNewsRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -17,6 +19,7 @@ import java.util.stream.Collectors;
 @Service
 public class NewsIntegrationService {
 
+    private static final Logger log = LoggerFactory.getLogger(NewsIntegrationService.class);
     private final NewsCollectorService collectorService;
     private final RawNewsRepository rawNewsRepository;
     private final SolarAiService solarAiService;
@@ -30,10 +33,11 @@ public class NewsIntegrationService {
     }
 
     public void collectAndStoreRawNews(String query) throws IOException {
-        System.out.println("\n[NewsPipeline] 🚀 1단계: 뉴스 수집 가동 (" + query + ")");
+        log.info("[NewsPipeline] 1단계: 뉴스 수집 시작 - query={}", query);
         List<Map<String, Object>> articles = collectorService.fetchFootballNews(query);
         List<RawNews> existingNews = rawNewsRepository.findAll();
 
+        int count = 0;
         for (Map<String, Object> article : articles) {
             try {
                 String url = (String) article.get("url");
@@ -46,21 +50,26 @@ public class NewsIntegrationService {
                 String fullContent = collectorService.extractFullContent(url);
                 if (fullContent.length() < 100) continue;
                 rawNewsRepository.save(new RawNews(url, title, source, publishedAt, fullContent, null, null, false));
-                System.out.println("[NewsPipeline] ✅ 수집: " + title);
-            } catch (Exception e) { System.err.println("[NewsPipeline] ❌ 수집 실패: " + e.getMessage()); }
+                count++;
+            } catch (Exception e) { 
+                log.error("[NewsPipeline] 뉴스 수집 실패 - error={}, url={}", e.getMessage(), article.get("url")); 
+            }
         }
-        System.out.println("[NewsPipeline] 🏁 1단계 완료");
+        log.info("[NewsPipeline] 1단계: 뉴스 수집 완료 - newArticles={}", count);
     }
 
     public void processRawNewsMetadata() throws IOException {
-        System.out.println("\n[NewsPipeline] 🧠 2단계: AI 개별 분석");
+        log.info("[NewsPipeline] 2단계: AI 개별 분석 시작");
         List<RawNews> allRawNews = rawNewsRepository.findAll();
         List<RawNews> unprocessedNews = allRawNews.stream()
                 .filter(n -> !n.isProcessed())
                 .limit(20) 
                 .toList();
 
-        if (unprocessedNews.isEmpty()) return;
+        if (unprocessedNews.isEmpty()) {
+            log.info("[NewsPipeline] 분석할 뉴스가 없습니다.");
+            return;
+        }
 
         int batchSize = 3; 
         for (int i = 0; i < unprocessedNews.size(); i += batchSize) {
@@ -84,16 +93,16 @@ public class NewsIntegrationService {
             for (RawNews pn : processedBatch) {
                 if (pn.isProcessed()) {
                     rawNewsRepository.update(pn);
-                    System.out.println("[NewsPipeline] ✨ 분석 완료: " + pn.title());
+                    log.info("[NewsPipeline] AI 개별 분석 완료 - title={}", pn.title());
                 }
             }
         }
-        System.out.println("[NewsPipeline] 🏁 2단계 완료");
+        log.info("[NewsPipeline] 2단계: AI 개별 분석 완료");
     }
 
     public void runGlobalScoring() {
         try {
-            System.out.println("\n[NewsPipeline] 📊 3단계: 통합 스코어링");
+            log.info("[NewsPipeline] 3단계: 주제 기반 통합 스코어링 시작");
             List<RawNews> allRawNews = rawNewsRepository.findAll();
             LocalDateTime timeWindow = LocalDateTime.now().minusHours(72);
 
@@ -111,7 +120,7 @@ public class NewsIntegrationService {
                     })
                     .collect(Collectors.toList());
 
-            System.out.println("[NewsPipeline] 🧐 분석 후보: " + metadataList.size() + "건 (최근 72시간 전체)");
+            log.info("[NewsPipeline] 분석 후보 선정 완료 - candidateCount={} (72시간 이내)", metadataList.size());
             if (metadataList.isEmpty()) return;
 
             int chunkSize = 10;
@@ -119,17 +128,6 @@ public class NewsIntegrationService {
                 int end = Math.min(i + chunkSize, metadataList.size());
                 List<Map<String, Object>> chunk = metadataList.subList(i, end);
 
-                // AI에게 보내는 데이터 최소화 (제목, 요약만)
-                List<Map<String, Object>> minimalChunk = chunk.stream()
-                        .map(n -> {
-                            Map<String, Object> map = new HashMap<>();
-                            map.put("title", n.get("title"));
-                            map.put("summary", n.get("summary"));
-                            map.put("url", n.get("url")); // URL 복구용으로 유지
-                            return map;
-                        }).collect(Collectors.toList());
-
-                // 매 청크마다 최신 피드의 ID와 제목을 가져와서 중복 방지 참고용으로 사용
                 List<Map<String, Object>> existingFeeds = newsRepository.findAll().stream()
                         .map(n -> {
                             Map<String, Object> map = new HashMap<>();
@@ -139,15 +137,14 @@ public class NewsIntegrationService {
                         })
                         .collect(Collectors.toList());
 
-                System.out.println("[NewsPipeline] 🤖 AI 청크 분석 중 (" + (i/chunkSize + 1) + "회차, " + minimalChunk.size() + "건)...");
-                List<Map<String, Object>> refinedEvents = solarAiService.analyzeNewsBatch(minimalChunk, existingFeeds);
+                log.info("[NewsPipeline] AI 청크 분석 요청 - chunkIndex={}, chunkSize={}", (i/chunkSize + 1), chunk.size());
+                List<Map<String, Object>> refinedEvents = solarAiService.analyzeNewsBatch(chunk, existingFeeds);
 
                 if (refinedEvents != null && !refinedEvents.isEmpty()) {
                     for (Map<String, Object> event : refinedEvents) {
                         try { 
                             if (event == null || event.get("title") == null) continue;
                             
-                            // representativeUrl 보충
                             if (event.get("representativeUrl") == null) {
                                 String eventTitle = event.get("title").toString();
                                 chunk.stream()
@@ -158,15 +155,14 @@ public class NewsIntegrationService {
                             
                             processRefinedEvent(event); 
                         } catch (Exception e) { 
-                            System.err.println("[NewsPipeline] ❌ 피드 반영 에러: " + e.getMessage());
+                            log.error("[NewsPipeline] 피드 반영 에러 - title={}, error={}", event.get("title"), e.getMessage());
                         }
                     }
                 }
             }
-            System.out.println("[NewsPipeline] 🏁 3단계 완료: 전체 뉴스 피드 업데이트 성공");
+            log.info("[NewsPipeline] 3단계: 주제 기반 통합 스코어링 완료");
         } catch (IOException e) { 
-            System.err.println("[NewsPipeline] ❌ 오류: " + e.getMessage());
-            e.printStackTrace();
+            log.error("[NewsPipeline] 스코어링 중 오류 발생 - error={}", e.getMessage());
         }
     }
 
@@ -192,8 +188,6 @@ public class NewsIntegrationService {
 
         List<com.tikitalka.model.News> feed = newsRepository.findAll();
         
-        // 1. AI가 반환한 ID로 찾기
-        // 2. 제목이나 URL로 찾기 (백업)
         com.tikitalka.model.News existing = feed.stream()
                 .filter(n -> (aiGeneratedId != null && !"null".equals(aiGeneratedId) && n.id().equals(aiGeneratedId)) 
                           || n.title().equals(title) 
@@ -202,10 +196,10 @@ public class NewsIntegrationService {
 
         if (existing != null) {
             newsRepository.update(new com.tikitalka.model.News(existing.id(), title, summary, tag, existing.publishedAt(), hotnessScore, originalContent, url, sources));
-            System.out.println("[NewsPipeline] 🔄 업데이트: " + title);
+            log.info("[NewsPipeline] 피드 업데이트 - title={}", title);
         } else {
             newsRepository.save(new com.tikitalka.model.News(java.util.UUID.randomUUID().toString(), title, summary, tag, LocalDateTime.now(), hotnessScore, originalContent, url, sources));
-            System.out.println("[NewsPipeline] ✨ 신규 추가: " + title);
+            log.info("[NewsPipeline] 신규 피드 추가 - title={}", title);
         }
     }
 }
