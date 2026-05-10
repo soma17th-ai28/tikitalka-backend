@@ -8,6 +8,14 @@ google:
     credentials-path: ${GOOGLE_APPLICATION_CREDENTIALS:./secrets/tikitoka-495701-927433d85001.json}
     range: Chat!A:E
     news-range: News!A:I
+
+external:
+  news-api:
+    key: ${NEWS_API_KEY}
+    base-url: https://newsapi.org/v2
+  solar-api:
+    key: ${SOLAR_API_KEY}
+    base-url: https://api.upstage.ai/v1/solar
 ai:
   service:
     url: ${AI_SERVICE_URL:http://localhost:8000}
