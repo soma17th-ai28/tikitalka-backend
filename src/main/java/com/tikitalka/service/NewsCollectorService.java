@@ -16,30 +16,28 @@ import java.util.Map;
 @Service
 public class NewsCollectorService {
 
-    private final WebClient webClient;
+    private final WebClient webClient = WebClient.create();
 
     @Value("${external.news-api.key}")
     private String newsApiKey;
 
-    @Value("${external.news-api.base-url}")
-    private String newsApiBaseUrl;
-
-    public NewsCollectorService(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.build();
+    public NewsCollectorService() {
     }
 
     public List<Map<String, Object>> fetchFootballNews(String query) {
+        java.net.URI uri = org.springframework.web.util.UriComponentsBuilder
+                .fromUriString("https://newsapi.org/v2/everything")
+                .queryParam("q", query)
+                .queryParam("language", "en")
+                .queryParam("sortBy", "publishedAt")
+                .queryParam("pageSize", 30)
+                .queryParam("apiKey", newsApiKey)
+                .build().toUri();
+        
+        System.out.println("Fetching news from NewsAPI: " + uri);
+
         Map<String, Object> response = webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .scheme("https")
-                        .host("newsapi.org")
-                        .path("/v2/everything")
-                        .queryParam("q", query)
-                        .queryParam("language", "en")
-                        .queryParam("sortBy", "publishedAt")
-                        .queryParam("pageSize", 10)
-                        .queryParam("apiKey", newsApiKey)
-                        .build())
+                .uri(uri)
                 .retrieve()
                 .bodyToMono(Map.class)
                 .block();

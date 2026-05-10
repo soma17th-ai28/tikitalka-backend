@@ -32,19 +32,19 @@ public class RawNewsRepository {
                 .execute();
 
         List<List<Object>> values = response.getValues();
-        if (values == null || values.isEmpty()) {
-            return new ArrayList<>();
-        }
+        if (values == null || values.isEmpty()) return new ArrayList<>();
 
+        // 헤더("url")를 가진 행과 빈 행을 제외
         return values.stream()
+                .filter(row -> row.size() >= 4 && !getString(row, 0).equals("url") && !getString(row, 0).isEmpty())
                 .map(this::mapToRawNews)
                 .collect(Collectors.toList());
     }
 
     public void save(RawNews news) throws IOException {
+        ensureHeader();
         List<Object> row = mapToRow(news);
         ValueRange body = new ValueRange().setValues(List.of(row));
-
         sheets.spreadsheets().values()
                 .append(properties.spreadsheetId(), RANGE, body)
                 .setValueInputOption("RAW")
@@ -52,17 +52,23 @@ public class RawNewsRepository {
     }
 
     public void update(RawNews news) throws IOException {
-        List<RawNews> allNews = findAll();
-        int rowIndex = -1;
-        for (int i = 0; i < allNews.size(); i++) {
-            if (allNews.get(i).url().equals(news.url())) {
-                rowIndex = i + 1; // 1-based index (assuming no header, or adjust if there is)
+        ValueRange response = sheets.spreadsheets().values()
+                .get(properties.spreadsheetId(), RANGE)
+                .execute();
+        List<List<Object>> allRows = response.getValues();
+        
+        if (allRows == null) return;
+
+        int physicalRowIndex = -1;
+        for (int i = 0; i < allRows.size(); i++) {
+            if (getString(allRows.get(i), 0).equals(news.url())) {
+                physicalRowIndex = i + 1;
                 break;
             }
         }
 
-        if (rowIndex != -1) {
-            String updateRange = "RawNews!A" + rowIndex + ":H" + rowIndex;
+        if (physicalRowIndex > 0) {
+            String updateRange = "RawNews!A" + physicalRowIndex + ":H" + physicalRowIndex;
             ValueRange body = new ValueRange().setValues(List.of(mapToRow(news)));
             sheets.spreadsheets().values()
                     .update(properties.spreadsheetId(), updateRange, body)
@@ -71,36 +77,46 @@ public class RawNewsRepository {
         }
     }
 
+    private void ensureHeader() throws IOException {
+        ValueRange response = sheets.spreadsheets().values()
+                .get(properties.spreadsheetId(), "RawNews!A1:A1")
+                .execute();
+        if (response.getValues() == null || response.getValues().isEmpty()) {
+            List<Object> header = List.of("url", "title", "source", "publishedAt", "fullContent", "summary", "tag", "isProcessed");
+            ValueRange headerBody = new ValueRange().setValues(List.of(header));
+            sheets.spreadsheets().values()
+                    .update(properties.spreadsheetId(), "RawNews!A1:H1", headerBody)
+                    .setValueInputOption("RAW")
+                    .execute();
+        }
+    }
+
     private RawNews mapToRawNews(List<Object> row) {
+        String publishedAtStr = getString(row, 3);
+        LocalDateTime publishedAt;
+        try {
+            publishedAt = publishedAtStr.isEmpty() ? LocalDateTime.now() : LocalDateTime.parse(publishedAtStr, FORMATTER);
+        } catch (Exception e) {
+            publishedAt = LocalDateTime.now();
+        }
+
         return new RawNews(
-                getString(row, 0),
-                getString(row, 1),
-                getString(row, 2),
-                LocalDateTime.parse(getString(row, 3), FORMATTER),
-                getString(row, 4),
-                getString(row, 5),
-                getString(row, 6),
+                getString(row, 0), getString(row, 1), getString(row, 2), publishedAt,
+                getString(row, 4), getString(row, 5), getString(row, 6),
                 Boolean.parseBoolean(getString(row, 7))
         );
     }
 
     private List<Object> mapToRow(RawNews news) {
         return List.of(
-                news.url(),
-                news.title(),
-                news.source(),
-                news.publishedAt().format(FORMATTER),
-                news.fullContent(),
-                news.summary() != null ? news.summary() : "",
-                news.tag() != null ? news.tag() : "",
-                String.valueOf(news.isProcessed())
+                news.url(), news.title(), news.source(), news.publishedAt().format(FORMATTER),
+                news.fullContent(), news.summary() != null ? news.summary() : "",
+                news.tag() != null ? news.tag() : "", String.valueOf(news.isProcessed())
         );
     }
 
     private String getString(List<Object> row, int index) {
-        if (index >= row.size() || row.get(index) == null) {
-            return "";
-        }
+        if (index >= row.size() || row.get(index) == null) return "";
         return row.get(index).toString();
     }
 }

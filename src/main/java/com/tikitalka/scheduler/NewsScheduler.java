@@ -15,11 +15,11 @@ public class NewsScheduler {
         this.newsIntegrationService = newsIntegrationService;
     }
 
-    // 매 1시간마다 실행
-    @Scheduled(cron = "0 0 * * * *")
+    // 매 20분마다 실행
+    @Scheduled(cron = "0 0/20 * * * *")
     public void scheduleNewsTask() throws IOException {
-        // 1. 수집
-        newsIntegrationService.collectAndStoreRawNews("Premier League OR Champions League OR K-League");
+        // 1. 수집 (5대 리그 + 챔스 + 유로파)
+        newsIntegrationService.collectAndStoreRawNews("Premier League OR La Liga OR Bundesliga OR Serie A OR Ligue 1 OR Champions League OR Europa League");
         
         // 2. 개별 메타데이터 추출
         newsIntegrationService.processRawNewsMetadata();

@@ -11,10 +11,10 @@ google:
 
 external:
   news-api:
-    key: ${NEWS_API_KEY}
+    key: ${NEWS_API_KEY:dummy-key}
     base-url: https://newsapi.org/v2
   solar-api:
-    key: ${SOLAR_API_KEY}
+    key: ${SOLAR_API_KEY:dummy-key}
     base-url: https://api.upstage.ai/v1/solar
 ai:
   service:
