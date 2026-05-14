@@ -33,10 +33,10 @@ class NewsServiceTest {
     @BeforeEach
     void setUp() {
         sampleNews = List.of(
-                new News("1", "PL News 1", "Summary 1", "PL", LocalDateTime.now().minusHours(2), 10, "Content 1", "url1", "source1"),
-                new News("2", "Bundesliga News 1", "Summary 2", "Bundesliga", LocalDateTime.now().minusHours(1), 50, "Content 2", "url2", "source2"),
-                new News("3", "PL News 2", "Summary 3", "PL", LocalDateTime.now().minusHours(3), 30, "Content 3", "url3", "source3"),
-                new News("4", "ChampionsLeague News 1", "Summary 4", "ChampionsLeague", LocalDateTime.now(), 20, "Content 4", "url4", "source4")
+                new News("1", "PL News 1", "Summary 1", "PL", LocalDateTime.now().minusHours(2), 10, "Content 1", "url1", "source1", "image1"),
+                new News("2", "Bundesliga News 1", "Summary 2", "Bundesliga", LocalDateTime.now().minusHours(1), 50, "Content 2", "url2", "source2", "image2"),
+                new News("3", "PL News 2", "Summary 3", "PL", LocalDateTime.now().minusHours(3), 30, "Content 3", "url3", "source3", "image3"),
+                new News("4", "ChampionsLeague News 1", "Summary 4", "ChampionsLeague", LocalDateTime.now(), 20, "Content 4", "url4", "source4", "image4")
         );
     }
 
@@ -87,7 +87,7 @@ class NewsServiceTest {
     void addDuplicateNews() throws IOException {
         // given
         when(newsRepository.findAll()).thenReturn(sampleNews);
-        News duplicateNews = new News("5", "Duplicate Title", "Summary", "PL", LocalDateTime.now(), 0, "Content", "url1", "source1");
+        News duplicateNews = new News("5", "Duplicate Title", "Summary", "PL", LocalDateTime.now(), 0, "Content", "url1", "source1", "image1");
 
         // when
         newsService.addNews(duplicateNews);

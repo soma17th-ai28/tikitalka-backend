@@ -38,6 +38,13 @@ public class NewsTestController {
         return "Process completed. Check server logs for details.";
     }
 
+    @GetMapping("/clear")
+    public String clearRawNews() throws IOException {
+        log.info("[NewsTestController] RawNews 시트 초기화 요청");
+        newsIntegrationService.clearRawNews();
+        return "RawNews sheet cleared and header reset.";
+    }
+
     @GetMapping("/raw-count")
     public String getRawCount() throws IOException {
         List<RawNews> all = rawNewsRepository.findAll();

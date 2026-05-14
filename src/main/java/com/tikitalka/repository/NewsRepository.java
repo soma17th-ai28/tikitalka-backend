@@ -20,7 +20,7 @@ public class NewsRepository {
     private final GoogleSheetsProperties properties;
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final String SHEET_NAME = "News"; // 시트 이름 명시
-    private static final String RANGE = "News!A:I";  // 범위 고정
+    private static final String RANGE = "News!A:J";  // 범위 고정
 
     public NewsRepository(Sheets sheets, GoogleSheetsProperties properties) {
         this.sheets = sheets;
@@ -69,7 +69,7 @@ public class NewsRepository {
         }
 
         if (physicalRowIndex > 0) {
-            String updateRange = SHEET_NAME + "!A" + physicalRowIndex + ":I" + physicalRowIndex;
+            String updateRange = SHEET_NAME + "!A" + physicalRowIndex + ":J" + physicalRowIndex;
             ValueRange body = new ValueRange().setValues(List.of(mapToRow(news)));
             sheets.spreadsheets().values()
                     .update(properties.spreadsheetId(), updateRange, body)
@@ -83,10 +83,10 @@ public class NewsRepository {
                 .get(properties.spreadsheetId(), SHEET_NAME + "!A1:A1")
                 .execute();
         if (response.getValues() == null || response.getValues().isEmpty()) {
-            List<Object> header = List.of("id", "title", "summary", "tag", "publishedAt", "hotnessScore", "originalContent", "url", "source");
+            List<Object> header = List.of("id", "title", "summary", "tag", "publishedAt", "hotnessScore", "originalContent", "url", "source", "imageUrl");
             ValueRange headerBody = new ValueRange().setValues(List.of(header));
             sheets.spreadsheets().values()
-                    .update(properties.spreadsheetId(), SHEET_NAME + "!A1:I1", headerBody)
+                    .update(properties.spreadsheetId(), SHEET_NAME + "!A1:J1", headerBody)
                     .setValueInputOption("RAW")
                     .execute();
         }
@@ -104,7 +104,7 @@ public class NewsRepository {
         return new News(
                 getString(row, 0), getString(row, 1), getString(row, 2), getString(row, 3),
                 publishedAt, Integer.parseInt(getString(row, 5).isEmpty() ? "0" : getString(row, 5)),
-                getString(row, 6), getString(row, 7), getString(row, 8)
+                getString(row, 6), getString(row, 7), getString(row, 8), getString(row, 9)
         );
     }
 
@@ -112,7 +112,8 @@ public class NewsRepository {
         return List.of(
                 news.id(), news.title(), news.summary(), news.tag(),
                 news.publishedAt().format(FORMATTER), String.valueOf(news.hotnessScore()),
-                news.originalContent(), news.url(), news.source()
+                news.originalContent(), news.url(), news.source(),
+                news.imageUrl() != null ? news.imageUrl() : ""
         );
     }
 

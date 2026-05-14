@@ -19,7 +19,7 @@ public class RawNewsRepository {
     private final Sheets sheets;
     private final GoogleSheetsProperties properties;
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-    private static final String RANGE = "RawNews!A:H";
+    private static final String RANGE = "RawNews!A:J";
 
     public RawNewsRepository(Sheets sheets, GoogleSheetsProperties properties) {
         this.sheets = sheets;
@@ -68,7 +68,7 @@ public class RawNewsRepository {
         }
 
         if (physicalRowIndex > 0) {
-            String updateRange = "RawNews!A" + physicalRowIndex + ":H" + physicalRowIndex;
+            String updateRange = "RawNews!A" + physicalRowIndex + ":J" + physicalRowIndex;
             ValueRange body = new ValueRange().setValues(List.of(mapToRow(news)));
             sheets.spreadsheets().values()
                     .update(properties.spreadsheetId(), updateRange, body)
@@ -77,15 +77,22 @@ public class RawNewsRepository {
         }
     }
 
+    public void clearAll() throws IOException {
+        sheets.spreadsheets().values()
+                .clear(properties.spreadsheetId(), "RawNews!A:J", new com.google.api.services.sheets.v4.model.ClearValuesRequest())
+                .execute();
+        ensureHeader(); // 헤더 즉시 재생성
+    }
+
     private void ensureHeader() throws IOException {
         ValueRange response = sheets.spreadsheets().values()
                 .get(properties.spreadsheetId(), "RawNews!A1:A1")
                 .execute();
         if (response.getValues() == null || response.getValues().isEmpty()) {
-            List<Object> header = List.of("url", "title", "source", "publishedAt", "fullContent", "summary", "tag", "isProcessed");
+            List<Object> header = List.of("url", "title", "source", "publishedAt", "fullContent", "summary", "tag", "imageUrl", "isProcessed", "isIntegrated");
             ValueRange headerBody = new ValueRange().setValues(List.of(header));
             sheets.spreadsheets().values()
-                    .update(properties.spreadsheetId(), "RawNews!A1:H1", headerBody)
+                    .update(properties.spreadsheetId(), "RawNews!A1:J1", headerBody)
                     .setValueInputOption("RAW")
                     .execute();
         }
@@ -103,7 +110,9 @@ public class RawNewsRepository {
         return new RawNews(
                 getString(row, 0), getString(row, 1), getString(row, 2), publishedAt,
                 getString(row, 4), getString(row, 5), getString(row, 6),
-                Boolean.parseBoolean(getString(row, 7))
+                getString(row, 7),
+                row.size() > 8 && Boolean.parseBoolean(getString(row, 8)),
+                row.size() > 9 && Boolean.parseBoolean(getString(row, 9))
         );
     }
 
@@ -111,7 +120,10 @@ public class RawNewsRepository {
         return List.of(
                 news.url(), news.title(), news.source(), news.publishedAt().format(FORMATTER),
                 news.fullContent(), news.summary() != null ? news.summary() : "",
-                news.tag() != null ? news.tag() : "", String.valueOf(news.isProcessed())
+                news.tag() != null ? news.tag() : "", 
+                news.imageUrl() != null ? news.imageUrl() : "",
+                String.valueOf(news.isProcessed()),
+                String.valueOf(news.isIntegrated())
         );
     }
 

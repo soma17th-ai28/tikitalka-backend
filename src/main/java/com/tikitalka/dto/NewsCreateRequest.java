@@ -12,6 +12,8 @@ public record NewsCreateRequest(
         @JsonProperty("full_text")
         String originalContent,
         String url,
-        String tag
+        String tag,
+        @JsonProperty("urlToImage")
+        String imageUrl
 ) {
 }
