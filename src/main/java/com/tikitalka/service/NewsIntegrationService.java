@@ -35,6 +35,7 @@ public class NewsIntegrationService {
     public void collectAndStoreRawNews(String query) throws IOException {
         log.info("[NewsPipeline] 1단계: 뉴스 수집 시작 - query={}", query);
         List<Map<String, Object>> articles = collectorService.fetchFootballNews(query);
+        log.info("[NewsPipeline] NewsAPI 응답 개수 - count={}", articles.size());
         List<RawNews> existingNews = rawNewsRepository.findAll();
 
         int count = 0;
