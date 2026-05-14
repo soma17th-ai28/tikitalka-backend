@@ -1,13 +1,25 @@
 import os
 import re
+import logging
 import httpx
-from fastapi import FastAPI, HTTPException
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from typing import Any, Optional, TypedDict
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("server.log", encoding="utf-8"),
+    ],
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Soccer AI Chatbot API")
 
@@ -24,16 +36,31 @@ UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY", "")
 UPSTAGE_API_URL = "https://api.upstage.ai/v1/chat/completions"
 UPSTAGE_MODEL = "solar-pro"
 SERPER_API_KEY = os.getenv("NEWSDATA_API_KEY", "")
-SERPER_API_URL = "https://google.serper.dev/news"
+SERPER_API_URL = "https://google.serper.dev/search"
 NEWS_NEED_PATTERN = re.compile(r"\[NEED_NEWS:\s*(.+?)\]")
 
 END_SIGNALS = {"끝", "종료", "bye", "goodbye", "그만", "닫기", "exit", "quit", "고마워", "감사", "thank"}
 
+ROUTING_PROMPT = (
+    "You are a routing assistant for a soccer chatbot. "
+    "Decide whether the user's question benefits from fetching current news.\n\n"
+    "DEFAULT to YES. Only answer NO when the question is CLEARLY one of these timeless categories:\n"
+    "- Official rules / laws of the game (e.g. offside rule, red card criteria)\n"
+    "- Pure tactics or formations with no specific team or player mentioned\n"
+    "- Historical facts unambiguously before 2020\n"
+    "- Abstract definitions or concepts (e.g. 'what is a hat-trick?')\n\n"
+    "Answer YES for everything else, including: any player, team, league, manager, contract, "
+    "squad info, form, injury, transfer, score, standing, award, stat, season, comparison, "
+    "opinion about a real-world event, or any question where a fresher answer would help.\n"
+    "When in doubt, answer YES.\n\n"
+    "If news is needed, respond EXACTLY: YES: <English search keyword>\n"
+    "If not needed, respond EXACTLY: NO\n"
+    "No other text."
+)
+
 SYSTEM_PROMPT = (
     "You are a soccer-expert friend: enthusiastic, knowledgeable, and casual.\n\n"
-    "IMPORTANT: Respond ONLY in one of these three exact formats. No extra text, no notes, no explanations.\n\n"
-    "FORMAT A — when you need current news (recent match results, scores, transfers, injuries, award winners like Ballon d'Or, Golden Boot, FIFA Best Player, current standings, any fact that changes year to year):\n"
-    "[NEED_NEWS: search keyword]\n\n"
+    "IMPORTANT: Respond ONLY in one of these two exact formats. No extra text, no notes, no explanations.\n\n"
     "FORMAT B — for soccer-related questions:\n"
     "REPLY: <your answer in at most 2 lines>\n"
     "SUGGEST: <one follow-up soccer question>\n\n"
@@ -43,98 +70,23 @@ SYSTEM_PROMPT = (
     "FORMAT C — for non-soccer questions INCLUDING greetings (안녕/hi/hello), weather, food, and any other general topics:\n"
     "REPLY: <one sentence friendly response>\n"
     "SUGGEST: NONE\n\n"
-    "Always respond in Korean regardless of the language of any news context. Do NOT use FORMAT A if news context is already provided."
+    "Always respond in Korean."
 )
 
 NEWS_SYSTEM_PROMPT = (
     "You are a soccer-expert friend: enthusiastic, knowledgeable, and casual.\n\n"
     "News context has been provided below. IMPORTANT: prioritize this news data over your training knowledge.\n"
     "If news and training knowledge conflict, follow the news.\n"
-    "CRITICAL: If the news context does NOT explicitly contain the answer, say '최신 뉴스에서 확인할 수 없었습니다' and do NOT guess, infer, or fabricate any names, facts, or details.\n"
+    "Use the news as your ONLY source. Answer based on what the news says, even if partial or inconclusive.\n"
+    "ONLY say '최신 뉴스에서 확인할 수 없었습니다' when the news has absolutely NO relevant information. "
+    "Do NOT append this phrase alongside a real answer.\n"
     "When using news data, naturally include phrases like '최근 뉴스에 따르면'.\n"
-    "Respond ONLY in this exact format (no extra text):\n"
+    "Respond ONLY in FORMAT A below (no extra text, exactly one REPLY line):\n\n"
+    "FORMAT A — for questions answered with latest news data:\n"
     "REPLY: <your answer in at most 2 lines>\n"
     "SUGGEST: <one follow-up question>\n\n"
     "Always respond in Korean regardless of the language of any news context."
 )
-
-RECENCY_SIGNALS = {
-    "최근", "요즘", "지금", "현재", "어제", "오늘", "이번 시즌", "이번주", "이번 주",
-    "이번달", "이번 달", "최신", "방금", "결과", "스코어", "순위", "이적", "부상",
-    "영입", "방출", "계약", "올 시즌", "이번년도",
-    "수상", "받은", "탄 사람", "누가 받", "누구야", "가장 최근",
-}
-SOCCER_KEYWORD_MAP: dict[str, str] = {
-    "챔피언스리그": "Champions League",
-    "ucl": "Champions League",
-    "유로파리그": "Europa League",
-    "프리미어리그": "Premier League",
-    "epl": "Premier League",
-    "라리가": "La Liga",
-    "분데스리가": "Bundesliga",
-    "세리에": "Serie A",
-    "월드컵": "World Cup",
-    "유로": "Euro",
-    "아시안컵": "Asian Cup",
-    "우승": "winner",
-    "이적": "transfer",
-    "부상": "injury",
-    "순위": "standings",
-    "결과": "result",
-    "스코어": "score",
-    "발롱도르": "Ballon d'Or",
-    "골든부트": "Golden Boot",
-    "골든글러브": "Golden Glove",
-    "피파 올해의 선수": "FIFA Best Player",
-    "올해의 선수": "FIFA Best Player",
-    "수상자": "award winner",
-}
-
-
-CONTEXT_KEYWORDS: list[tuple[set[str], str]] = [
-    ({"순위", "1위", "2위", "3위", "standings", "table", "랭킹"}, "standings"),
-    ({"득점왕", "top scorer", "골든부트", "골 순위", "득점 순위"}, "top scorer"),
-    ({"결과", "스코어", "경기 결과", "match result", "score"}, "match result"),
-    ({"이적", "영입", "transfer", "signing"}, "transfer news"),
-    ({"부상", "injury"}, "injury update"),
-    ({"발롱도르", "골든글러브", "올해의 선수", "수상", "award"}, "award winner 2025"),
-    ({"8강", "4강", "결승", "quarter", "semi", "final"}, "2025 results"),
-]
-
-def extract_news_keyword_heuristic(message: str) -> Optional[str]:
-    lower = message.lower()
-    has_recency = any(signal in lower for signal in RECENCY_SIGNALS)
-
-    matched_en: Optional[str] = None
-    for ko, en in SOCCER_KEYWORD_MAP.items():
-        if ko in lower:
-            matched_en = en
-            break
-    if not matched_en:
-        for en_term in ("Champions League", "Premier League", "La Liga", "Bundesliga",
-                        "Serie A", "World Cup", "transfer", "injury"):
-            if en_term.lower() in lower:
-                matched_en = en_term
-                break
-
-    # 축구 키워드가 없으면 뉴스 검색 안 함 (비축구 질문 오트리거 방지)
-    if not matched_en:
-        return None
-
-    # matched_en이 이미 수상 관련 키워드면 "award winner" 접미사 불필요
-    award_terms = {"Ballon d'Or", "Golden Boot", "Golden Glove", "FIFA Best Player", "award winner"}
-    if matched_en in award_terms:
-        context_suffix = "2025"
-    else:
-        context_suffix = "2025"
-        for signals, suffix in CONTEXT_KEYWORDS:
-            if any(s in lower for s in signals):
-                context_suffix = suffix
-                break
-
-    if has_recency:
-        return f"{matched_en} {context_suffix}"
-    return None
 
 
 class Message(TypedDict):
@@ -227,23 +179,25 @@ async def fetch_news_serper(keyword: str) -> Optional[str]:
             )
             response.raise_for_status()
             data: dict[str, Any] = response.json()
-        articles: list[Any] = data.get("news", [])[:3]
-        if not articles:
+        results: list[Any] = data.get("organic", [])[:5]
+        if not results:
             return None
-        lines: list[str] = [f"Latest news about '{keyword}':"]
-        for i, article in enumerate(articles, 1):
-            title: str = str(article.get("title", ""))
-            snippet: str = str(article.get("snippet", ""))
-            date: str = str(article.get("date", ""))
+        lines: list[str] = [f"Search results about '{keyword}':"]
+        for i, result in enumerate(results, 1):
+            title: str = str(result.get("title", ""))
+            snippet: str = str(result.get("snippet", ""))
+            date: str = str(result.get("date", ""))
             lines.append(f"{i}. {title}")
             if snippet:
                 lines.append(f"   {snippet}")
             if date:
                 lines.append(f"   ({date})")
-        if len(articles) < 3:
-            lines.append("(기사가 적어 정확하지 않을 수 있습니다.)")
         return "\n".join(lines)
-    except Exception:
+    except httpx.HTTPStatusError as e:
+        logger.error("Serper API HTTP error | status=%s | body=%s", e.response.status_code, e.response.text)
+        return None
+    except Exception as e:
+        logger.error("Serper API request failed | error=%s", e)
         return None
 
 
@@ -253,96 +207,80 @@ async def fetch_news(keyword: str) -> Optional[str]:
 
 async def call_upstage(history: list[Message], user_message: str) -> tuple[str, Optional[str]]:
     end_signal = is_end_signal(user_message)
+    current_date = datetime.now().strftime("%Y년 %m월 %d일")
+    date_context = f"현재 날짜: {current_date}"
 
-    # Heuristic pre-fetch: if clearly a current-soccer-info question, fetch news before LLM call
-    heuristic_keyword = extract_news_keyword_heuristic(user_message)
-    if heuristic_keyword:
-        news_context = await fetch_news(heuristic_keyword)
-        fallback_note = (
-            f"[{heuristic_keyword}에 대한 최신 뉴스를 찾지 못했습니다. 알고 있는 정보를 바탕으로 답변하되, 최신 정보가 아닐 수 있음을 언급해주세요.]"
-            if not news_context else None
-        )
-        extra_context = news_context or fallback_note or ""
-        messages_with_news: list[dict[str, str]] = [{"role": "system", "content": NEWS_SYSTEM_PROMPT}]
-        for msg in history:
-            messages_with_news.append({"role": msg["role"], "content": msg["content"]})
-        messages_with_news.append({"role": "system", "content": extra_context})
-        messages_with_news.append({"role": "user", "content": user_message})
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                UPSTAGE_API_URL,
-                headers={"Authorization": f"Bearer {UPSTAGE_API_KEY}", "Content-Type": "application/json"},
-                json={"model": UPSTAGE_MODEL, "messages": messages_with_news},
-                timeout=30.0,
-            )
-            resp.raise_for_status()
-            data: dict[str, Any] = resp.json()
-        return parse_llm_response(data["choices"][0]["message"]["content"], end_signal)
-
-    # Default flow: first LLM call, then check if FORMAT A news tag was emitted
-    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for msg in history:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": user_message})
-
+    # Step 1: 라우팅 - 뉴스 필요 여부 및 검색 키워드 결정
+    routing_messages: list[dict[str, str]] = [
+        {"role": "system", "content": date_context},
+        {"role": "system", "content": ROUTING_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
     async with httpx.AsyncClient() as client:
-        response = await client.post(
+        r1 = await client.post(
             UPSTAGE_API_URL,
-            headers={
-                "Authorization": f"Bearer {UPSTAGE_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={"model": UPSTAGE_MODEL, "messages": messages},
+            headers={"Authorization": f"Bearer {UPSTAGE_API_KEY}", "Content-Type": "application/json"},
+            json={"model": UPSTAGE_MODEL, "messages": routing_messages},
             timeout=30.0,
         )
-        response.raise_for_status()
-        data = response.json()
+        r1.raise_for_status()
+    routing_result: str = r1.json()["choices"][0]["message"]["content"].strip()
+    logger.info("Routing result: %s", routing_result)
 
-    content: str = data["choices"][0]["message"]["content"]
+    news_keyword: Optional[str] = None
+    if routing_result.upper().startswith("YES:"):
+        news_keyword = routing_result[4:].strip().splitlines()[0].strip()
 
-    news_keyword = extract_news_keyword(content)
+    # Step 2a: 뉴스 필요 → 검색 후 뉴스 기반 답변
     if news_keyword:
+        logger.info("News keyword: %s", news_keyword)
         news_context = await fetch_news(news_keyword)
-        fallback_note = (
-            f"[{news_keyword}에 대한 최신 뉴스를 찾지 못했습니다. 알고 있는 정보를 바탕으로 답변해주세요.]"
-            if not news_context else None
-        )
-        news_system = NEWS_SYSTEM_PROMPT
-        extra_context = news_context or fallback_note or ""
-        messages_with_news2: list[dict[str, str]] = [{"role": "system", "content": news_system}]
+        logger.info("News context: %s", news_context)
+        extra_context = news_context or f"[{news_keyword}에 대한 최신 뉴스를 찾지 못했습니다. 알고 있는 정보를 바탕으로 답변해주세요.]"
+        answer_messages: list[dict[str, str]] = [{"role": "system", "content": NEWS_SYSTEM_PROMPT}]
         for msg in history:
-            messages_with_news2.append({"role": msg["role"], "content": msg["content"]})
-        messages_with_news2.append({"role": "system", "content": extra_context})
-        messages_with_news2.append({"role": "user", "content": user_message})
-        async with httpx.AsyncClient() as client:
-            response2 = await client.post(
-                UPSTAGE_API_URL,
-                headers={
-                    "Authorization": f"Bearer {UPSTAGE_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={"model": UPSTAGE_MODEL, "messages": messages_with_news2},
-                timeout=30.0,
-            )
-            response2.raise_for_status()
-            data2: dict[str, Any] = response2.json()
-        content = data2["choices"][0]["message"]["content"]
+            answer_messages.append({"role": msg["role"], "content": msg["content"]})
+        answer_messages.append({"role": "system", "content": extra_context})
+        answer_messages.append({"role": "user", "content": user_message})
+    else:
+        # Step 2b: 뉴스 불필요 → 직접 답변
+        answer_messages = [
+            {"role": "system", "content": date_context},
+            {"role": "system", "content": SYSTEM_PROMPT},
+        ]
+        for msg in history:
+            answer_messages.append({"role": msg["role"], "content": msg["content"]})
+        answer_messages.append({"role": "user", "content": user_message})
+
+    async with httpx.AsyncClient() as client:
+        r2 = await client.post(
+            UPSTAGE_API_URL,
+            headers={"Authorization": f"Bearer {UPSTAGE_API_KEY}", "Content-Type": "application/json"},
+            json={"model": UPSTAGE_MODEL, "messages": answer_messages},
+            timeout=30.0,
+        )
+        r2.raise_for_status()
+    content: str = r2.json()["choices"][0]["message"]["content"]
 
     return parse_llm_response(content, end_signal)
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
+    logger.info("Request  | session=%s | message=%s", request.session_id, request.message)
     history = get_history(request.session_id)
 
     try:
         reply, suggested_question = await call_upstage(history, request.message)
     except httpx.HTTPStatusError as e:
+        logger.error("LLM API error | session=%s | status=%s", request.session_id, e.response.status_code)
         raise HTTPException(status_code=502, detail=f"LLM API error: {e.response.status_code}") from e
     except httpx.RequestError as e:
+        logger.error("LLM request failed | session=%s | error=%s", request.session_id, e)
         raise HTTPException(status_code=502, detail=f"LLM request failed: {e}") from e
 
     save_turn(request.session_id, request.message, reply)
+    logger.info("Response | session=%s | reply=%s | suggested=%s", request.session_id, reply, suggested_question)
 
     return ChatResponse(
         session_id=request.session_id,
