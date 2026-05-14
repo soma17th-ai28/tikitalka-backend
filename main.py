@@ -133,28 +133,31 @@ def is_end_signal(message: str) -> bool:
     return any(signal in lower for signal in END_SIGNALS)
 
 
+_DISCLAIMER_PREFIXES = ("(", "※", "*", "note:", "참고:", "주의:", "correction", "final answer", "final response")
+
 def parse_llm_response(content: str, end_signal: bool) -> tuple[str, Optional[str]]:
-    suggested_question: Optional[str] = None
-    reply_parts: list[str] = []
-    suggest_value: Optional[str] = None
+    # 1. SUGGEST: 추출 (어디 있든 먼저 뽑아냄)
+    suggest_match = re.search(r'SUGGEST:\s*(.+?)(?:\n|$)', content)
+    suggest_value: Optional[str] = suggest_match.group(1).strip() if suggest_match else None
 
-    for line in content.strip().splitlines():
-        stripped = line.strip()
-        if stripped.startswith("REPLY:"):
-            reply_parts.append(stripped[len("REPLY:"):].strip())
-        elif stripped.startswith("SUGGEST:"):
-            suggest_value = stripped[len("SUGGEST:"):].strip()
+    # 2. SUGGEST: 이후 모든 텍스트 제거 (같은 줄 포함)
+    content_clean = re.sub(r'\s*SUGGEST:.*', '', content, flags=re.DOTALL).strip()
+    content_clean = NEWS_NEED_PATTERN.sub("", content_clean).strip()
 
-    if reply_parts:
-        reply = "\n".join(reply_parts[:2])
+    # 3. REPLY: 추출
+    reply_match = re.search(r'REPLY:\s*(.+)', content_clean, re.DOTALL)
+    if reply_match:
+        reply_lines = [l for l in reply_match.group(1).strip().splitlines()
+                       if not l.strip().lower().startswith(_DISCLAIMER_PREFIXES)]
+        reply = "\n".join(reply_lines[:2]).strip()
     else:
-        # Strip residual [NEED_NEWS:...] tags and internal directives; use cleaned content
-        cleaned = NEWS_NEED_PATTERN.sub("", content).strip()
-        # If only SUGGEST: NONE remains (end signal case), give a closing reply
-        if suggest_value and suggest_value.upper() == "NONE" and not cleaned:
-            cleaned = "대화해서 즐거웠어! 또 궁금한 거 생기면 언제든지 찾아와 ⚽"
-        reply = cleaned or "잠깐, 제대로 된 답변을 못 드렸네요. 다시 질문해 주실 수 있나요?"
+        clean_lines = [l for l in content_clean.splitlines()
+                       if not l.strip().lower().startswith(_DISCLAIMER_PREFIXES + ("reply:",))]
+        if suggest_value and suggest_value.upper() == "NONE" and not clean_lines:
+            return "대화해서 즐거웠어! 또 궁금한 거 생기면 언제든지 찾아와 ⚽", None
+        reply = "\n".join(clean_lines[:2]).strip() or "잠깐, 제대로 된 답변을 못 드렸네요. 다시 질문해 주실 수 있나요?"
 
+    suggested_question: Optional[str] = None
     if not end_signal and suggest_value and suggest_value.upper() != "NONE":
         suggested_question = suggest_value
 
