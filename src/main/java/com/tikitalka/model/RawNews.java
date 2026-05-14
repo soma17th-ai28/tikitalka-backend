@@ -10,6 +10,8 @@ public record RawNews(
         String fullContent,
         String summary, // AI 1차 요약
         String tag,     // AI 1차 태그
-        boolean isProcessed
+        String imageUrl,
+        boolean isProcessed,
+        boolean isIntegrated
 ) {
 }

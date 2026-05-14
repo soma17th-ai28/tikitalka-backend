@@ -11,6 +11,7 @@ public record News(
         int hotnessScore,
         String originalContent,
         String url,
-        String source
+        String source,
+        String imageUrl
 ) {
 }

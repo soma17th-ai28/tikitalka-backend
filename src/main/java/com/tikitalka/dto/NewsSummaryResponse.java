@@ -10,6 +10,7 @@ public record NewsSummaryResponse(
         LocalDateTime publishedAt,
         int hotnessScore,
         String url,
-        String source
+        String source,
+        String imageUrl
 ) {
 }

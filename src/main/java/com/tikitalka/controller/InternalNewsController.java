@@ -32,7 +32,8 @@ public class InternalNewsController {
                 0, // hotnessScore initial value
                 request.originalContent(),
                 request.url(),
-                request.source()
+                request.source(),
+                request.imageUrl()
         );
         newsService.addNews(news);
     }

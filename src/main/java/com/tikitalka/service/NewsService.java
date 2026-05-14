@@ -51,7 +51,7 @@ public class NewsService {
 
         List<NewsSummaryResponse> content = filteredNews.subList(start, end).stream()
                 .map(n -> new NewsSummaryResponse(
-                        n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.url(), n.source()
+                        n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.url(), n.source(), n.imageUrl()
                 ))
                 .collect(Collectors.toList());
 
@@ -67,7 +67,7 @@ public class NewsService {
                 .map(n -> {
                     log.info("[NewsFeedAPI] 뉴스 상세 조회 완료 - title={}", n.title());
                     return new NewsDetailResponse(
-                        n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.originalContent(), n.url(), n.source()
+                        n.id(), n.title(), n.summary(), n.tag(), n.publishedAt(), n.hotnessScore(), n.originalContent(), n.url(), n.source(), n.imageUrl()
                     );
                 })
                 .orElseThrow(() -> {
@@ -77,6 +77,14 @@ public class NewsService {
     }
 
     public void addNews(News news) throws IOException {
+        List<News> allNews = newsRepository.findAll();
+        boolean exists = allNews.stream()
+                .anyMatch(n -> n.url().equals(news.url()));
+        
+        if (exists) {
+            log.info("[NewsFeedAPI] 중복된 뉴스 URL - 저장을 스킵합니다: {}", news.url());
+            return;
+        }
         newsRepository.save(news);
     }
 }
